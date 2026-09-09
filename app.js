@@ -1,62 +1,279 @@
 const DB_KEY='myfinance_v1';
+const APP_VERSION='1.1.0';
+const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','อื่น ๆ'];
+const incomeCats=['เงินเดือน','รายได้พิเศษ','ปันผล','ดอกเบี้ย','ค่าเช่า','ขายทรัพย์สิน','อื่น ๆ'];
 const defaultData={
-  pin:null, autoLock:true, lastActive:Date.now(),
-  transactions:[], assets:[], goals:[{id:'g1',name:'เงินสำรองฉุกเฉิน',target:300000,current:0}],
+  version:APP_VERSION,
+  pin:null,
+  autoLock:true,
+  autoLockMinutes:1,
+  lastActive:Date.now(),
+  transactions:[],
+  assets:[],
+  goals:[{id:'g1',name:'เงินสำรองฉุกเฉิน',target:300000,current:0}],
+  budgets:{},
+  snapshots:[],
   settings:{currency:'THB',hideZeroDebt:true}
 };
-let data=load(); let page='dashboard'; let txFilter='all'; let unlocked=!data.pin; let modal=null;
+
+let data=load();
+let page='dashboard';
+let txFilter='all';
+let unlocked=!data.pin;
+let modal=null;
+let editId=null;
+
 const THB=n=>new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',maximumFractionDigits:0}).format(Number(n||0));
 const num=n=>new Intl.NumberFormat('th-TH',{maximumFractionDigits:0}).format(Number(n||0));
-function load(){try{return {...defaultData,...JSON.parse(localStorage.getItem(DB_KEY)||'{}')}}catch{return structuredClone(defaultData)}}
-function save(){localStorage.setItem(DB_KEY,JSON.stringify(data));data.lastActive=Date.now()}
+const $=(s)=>document.querySelector(s);
+const $$=(s)=>[...document.querySelectorAll(s)];
+
+function clone(obj){return JSON.parse(JSON.stringify(obj))}
+function migrate(raw){
+  const merged={...clone(defaultData),...raw};
+  merged.transactions=Array.isArray(raw.transactions)?raw.transactions:[];
+  merged.assets=Array.isArray(raw.assets)?raw.assets:[];
+  merged.goals=Array.isArray(raw.goals)&&raw.goals.length?raw.goals:clone(defaultData.goals);
+  merged.budgets=raw.budgets&&typeof raw.budgets==='object'?raw.budgets:{};
+  merged.snapshots=Array.isArray(raw.snapshots)?raw.snapshots:[];
+  merged.settings={...defaultData.settings,...(raw.settings||{})};
+  merged.version=APP_VERSION;
+  return merged;
+}
+function load(){
+  try{return migrate(JSON.parse(localStorage.getItem(DB_KEY)||'{}'))}
+  catch{return clone(defaultData)}
+}
+function save(){
+  data.version=APP_VERSION;
+  data.lastActive=Date.now();
+  localStorage.setItem(DB_KEY,JSON.stringify(data));
+}
 function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
+function today(){return new Date().toISOString().slice(0,10)}
 function monthKey(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
 function inCurrentMonth(t){return (t.date||'').slice(0,7)===monthKey()}
-function totals(){const m=data.transactions.filter(inCurrentMonth);const income=m.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount),0);const expense=m.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount),0);const assetTotal=data.assets.reduce((s,x)=>s+Number(x.value||0),0);const debtTotal=data.assets.filter(x=>x.kind==='debt').reduce((s,x)=>s+Number(x.value||0),0);const netWorth=assetTotal-(debtTotal||0);return {income,expense,cashflow:income-expense,assetTotal,debtTotal,netWorth}}
 function esc(s=''){return String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function iconFor(cat){const m={'อาหาร':'🍜','เดินทาง':'🚗','ครอบครัว':'👨‍👩‍👧','สุขภาพ':'🩺','การศึกษา':'📚','ท่องเที่ยว':'✈️','ภาษี':'🧾','เงินเดือน':'💼','ปันผล':'💹','ดอกเบี้ย':'🏦','รายได้พิเศษ':'✨','ลงทุน':'📈','โอนเงิน':'🔄','อื่น ๆ':'•'};return m[cat]||'•'}
-function render(){document.getElementById('app').innerHTML=!unlocked?lockView():appView(); bind()}
-function lockView(){const first=!data.pin;return `<div class="lock"><div class="lock-card"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p>Private Financial Planner<br>ข้อมูลการเงินเก็บเฉพาะในเบราว์เซอร์บนอุปกรณ์นี้</p>${first?`<div class="field"><label>ตั้ง PIN 4–6 หลัก</label><input id="pin1" class="pin" inputmode="numeric" maxlength="6" type="password"></div><div class="field"><label>ยืนยัน PIN</label><input id="pin2" class="pin" inputmode="numeric" maxlength="6" type="password"></div><button class="primary" id="setupPin">เริ่มใช้งาน</button>`:`<div class="field"><label>PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus></div><button class="primary" id="unlockBtn">ปลดล็อก</button>`}<div class="notice">หมายเหตุ: PWA ไม่สามารถใช้ Face ID แบบ native โดยไม่พึ่งระบบ credential ของ iOS ได้ รุ่นนี้จึงใช้ PIN + Auto Lock เพื่อคงแนว Local-only/ไม่ใช้ iCloud</div></div></div>`}
+function typeLabel(t){return ({income:'รายรับ',expense:'รายจ่าย',transfer:'โอนเงิน',investment:'ลงทุน'})[t]||t}
+function iconFor(cat){const m={'อาหาร':'🍜','เดินทาง':'🚗','ครอบครัว':'👨‍👩‍👧','สุขภาพ':'🩺','การศึกษา':'📚','ท่องเที่ยว':'✈️','ภาษี':'🧾','ของใช้ส่วนตัว':'🧴','ค่าสาธารณูปโภค':'💡','เงินเดือน':'💼','ปันผล':'💹','ดอกเบี้ย':'🏦','รายได้พิเศษ':'✨','ค่าเช่า':'🏠','ขายทรัพย์สิน':'🏷️','ลงทุน':'📈','โอนเงิน':'🔄','อื่น ๆ':'•'};return m[cat]||'•'}
+function assetKindLabel(k){return ({cash:'เงินสด/ธนาคาร',stock:'หุ้น/กองทุน',gold:'ทอง',property:'ที่ดิน/อสังหาฯ',vehicle:'รถ/ยานพาหนะ',other:'ทรัพย์สินอื่น',debt:'หนี้สิน'})[k]||k}
+
+function totals(){
+  const m=data.transactions.filter(inCurrentMonth);
+  const income=m.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount||0),0);
+  const expense=m.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount||0),0);
+  const assetsOnly=data.assets.filter(x=>x.kind!=='debt');
+  const debts=data.assets.filter(x=>x.kind==='debt');
+  const assetTotal=assetsOnly.reduce((s,x)=>s+Number(x.value||0),0);
+  const debtTotal=debts.reduce((s,x)=>s+Number(x.value||0),0);
+  return {income,expense,cashflow:income-expense,assetTotal,debtTotal,netWorth:assetTotal-debtTotal};
+}
+function monthlyExpenseByCategory(){
+  const sums={};
+  data.transactions.filter(x=>x.type==='expense'&&inCurrentMonth(x)).forEach(x=>sums[x.category]=(sums[x.category]||0)+Number(x.amount||0));
+  return sums;
+}
+function currentBudgetMap(){return data.budgets[monthKey()]||{}}
+function snapshotCurrentMonth(){
+  const t=totals(); const key=monthKey();
+  const row={month:key,netWorth:t.netWorth,assetTotal:t.assetTotal,debtTotal:t.debtTotal,updatedAt:new Date().toISOString()};
+  const i=data.snapshots.findIndex(s=>s.month===key);
+  if(i>=0)data.snapshots[i]=row; else data.snapshots.push(row);
+  data.snapshots=data.snapshots.sort((a,b)=>a.month.localeCompare(b.month)).slice(-60);
+}
+
+function render(){document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
+function lockView(){
+  const first=!data.pin;
+  return `<div class="lock"><div class="lock-card"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p>Private Financial Planner<br>ข้อมูลอยู่ในเครื่องนี้ผ่านพื้นที่จัดเก็บของ Safari/PWA</p>${first?`<div class="notice">ยังไม่ได้ตั้ง PIN หากต้องการล็อกแอป ให้เข้า ⚙️ Settings หลังเปิดแอป แล้วเลือก “ตั้ง PIN”</div><button class="primary" id="enterWithoutPin">เข้าแอป</button>`:`<div class="field"><label>PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus></div><button class="primary" id="unlockBtn">ปลดล็อก</button>`}<div class="notice">Local-only: ไม่มีระบบ Sync/iCloud ในแอปนี้ ควร Export Backup เป็นระยะ</div></div></div>`
+}
 function appView(){return `<main class="shell">${page==='dashboard'?dashboard():page==='transactions'?transactions():page==='assets'?assets():page==='plan'?plan():settings()}</main>${bottomNav()}${modal?sheet():''}`}
-function header(title='MY FINANCE',sub='Personal Financial Planner'){return `<div class="header"><div class="brand"><h1>${title}</h1><p>${sub}</p></div><button class="month-btn">${new Date().toLocaleDateString('en-US',{month:'short',year:'numeric'})}</button></div>`}
-function dashboard(){const t=totals();const prev=0;const pct=prev?((t.netWorth-prev)/prev*100):0;return `${header()}<section class="hero"><div class="label">Net Worth</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct?`· ${pct.toFixed(1)}%`:''}</div></section><div class="grid3"><div class="mini income"><div class="t">รายรับ</div><div class="v">${THB(t.income)}</div></div><div class="mini expense"><div class="t">รายจ่าย</div><div class="v">${THB(t.expense)}</div></div><div class="mini cashflow"><div class="t">Cash Flow</div><div class="v">${THB(t.cashflow)}</div></div></div>${cashChart()}${spendingCard()}${healthCard()}${recentTx()}`}
-function cashChart(){let vals=[];for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);const k=monthKey(d);const inc=data.transactions.filter(x=>x.type==='income'&&x.date?.startsWith(k)).reduce((s,x)=>s+Number(x.amount),0);const exp=data.transactions.filter(x=>x.type==='expense'&&x.date?.startsWith(k)).reduce((s,x)=>s+Number(x.amount),0);vals.push(inc-exp)}const max=Math.max(...vals.map(v=>Math.abs(v)),1);const pts=vals.map((v,i)=>`${8+i*58},${72-(v/max)*48}`).join(' ');return `<section class="section"><div class="section-title"><h2>Monthly Cash Flow</h2><span>6 เดือน</span></div><div class="card chart-wrap"><svg viewBox="0 0 310 130"><defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6F87A6" stop-opacity=".24"/><stop offset="1" stop-color="#6F87A6" stop-opacity="0"/></linearGradient></defs><g class="chart-grid"><line x1="8" y1="24" x2="298" y2="24"/><line x1="8" y1="72" x2="298" y2="72"/><line x1="8" y1="120" x2="298" y2="120"/></g><polygon class="chart-area" points="${pts} 298,120 8,120"/><polyline class="chart-line" points="${pts}"/></svg></div></section>`}
-function spendingCard(){const tx=data.transactions.filter(x=>x.type==='expense'&&inCurrentMonth(x));const sums={};tx.forEach(x=>sums[x.category]=(sums[x.category]||0)+Number(x.amount));const entries=Object.entries(sums).sort((a,b)=>b[1]-a[1]).slice(0,5);const total=entries.reduce((s,x)=>s+x[1],0)||1;const colors=['#6F8F7B','#C98383','#6F87A6','#C8A867','#88769A'];let acc=0;const stops=entries.length?entries.map(([k,v],i)=>{const a=acc;acc+=v/total*100;return `${colors[i]} ${a}% ${acc}%`}).join(','):'#E7E0D4 0 100%';return `<section class="section"><div class="section-title"><h2>Where My Money Goes</h2><span>เดือนนี้</span></div><div class="card donut-row"><div class="donut" style="background:conic-gradient(${stops})"></div><div class="legend">${entries.length?entries.map(([k,v],i)=>`<div class="legend-item"><span><i class="dot" style="background:${colors[i]}"></i>${esc(k)}</span><b>${Math.round(v/total*100)}%</b></div>`).join(''):'<div class="empty">ยังไม่มีรายจ่าย</div>'}</div></div></section>`}
-function healthCard(){const t=totals();let score=50;if(t.cashflow>0)score+=20;if(t.income>0&&t.expense/t.income<.7)score+=15;if(t.debtTotal===0)score+=15;score=Math.max(0,Math.min(100,score));const g=data.goals[0]||{target:1,current:0};const gp=Math.min(100,Math.round((g.current/(g.target||1))*100));return `<section class="section"><div class="section-title"><h2>Financial Health</h2><span>สูตรโปร่งใส</span></div><div class="card health"><div class="score" style="--score:${score}"><strong>${score}</strong></div><div class="health-copy"><h3>${score>=80?'Very Good':score>=60?'Good':'Needs Attention'} ${t.debtTotal===0?'· Debt Free ✓':''}</h3><p>ประเมินจาก Cash Flow, สัดส่วนรายจ่าย และภาระหนี้ที่บันทึกไว้</p><div class="bar"><i style="width:${gp}%"></i></div><p style="margin-top:6px">${esc(g.name)} ${gp}%</p></div></div></section>`}
+function header(title='MY FINANCE',sub='Personal Financial Planner'){
+  return `<div class="header"><div class="brand"><h1>${title}</h1><p>${sub}</p></div><div class="head-actions"><button class="month-btn">${new Date().toLocaleDateString('en-US',{month:'short',year:'numeric'})}</button><button class="icon-btn" id="openSettings" aria-label="Settings">⚙️</button></div></div>`
+}
+function dashboard(){
+  const t=totals();
+  const prevKey=(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return monthKey(d)})();
+  const prev=data.snapshots.find(s=>s.month===prevKey);
+  const pct=prev&&Number(prev.netWorth)!==0?((t.netWorth-Number(prev.netWorth))/Math.abs(Number(prev.netWorth))*100):null;
+  return `${header()}<section class="hero"><div class="label">Net Worth</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section><div class="grid3"><div class="mini income"><div class="t">รายรับ</div><div class="v">${THB(t.income)}</div></div><div class="mini expense"><div class="t">รายจ่าย</div><div class="v">${THB(t.expense)}</div></div><div class="mini cashflow"><div class="t">Cash Flow</div><div class="v">${THB(t.cashflow)}</div></div></div>${cashChart()}${spendingCard()}${budgetSummary()}${healthCard()}${goalsSummary()}${recentTx()}`
+}
+function cashChart(){
+  const vals=[];
+  for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);const k=monthKey(d);const inc=data.transactions.filter(x=>x.type==='income'&&x.date?.startsWith(k)).reduce((s,x)=>s+Number(x.amount||0),0);const exp=data.transactions.filter(x=>x.type==='expense'&&x.date?.startsWith(k)).reduce((s,x)=>s+Number(x.amount||0),0);vals.push(inc-exp)}
+  const max=Math.max(...vals.map(v=>Math.abs(v)),1);
+  const pts=vals.map((v,i)=>`${8+i*58},${72-(v/max)*48}`).join(' ');
+  return `<section class="section"><div class="section-title"><h2>Monthly Cash Flow</h2><span>6 เดือน</span></div><div class="card chart-wrap"><svg viewBox="0 0 310 130"><defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6F87A6" stop-opacity=".24"/><stop offset="1" stop-color="#6F87A6" stop-opacity="0"/></linearGradient></defs><g class="chart-grid"><line x1="8" y1="24" x2="298" y2="24"/><line x1="8" y1="72" x2="298" y2="72"/><line x1="8" y1="120" x2="298" y2="120"/></g><polygon class="chart-area" points="${pts} 298,120 8,120"/><polyline class="chart-line" points="${pts}"/></svg></div></section>`
+}
+function spendingCard(){
+  const sums=monthlyExpenseByCategory();
+  const entries=Object.entries(sums).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const total=entries.reduce((s,x)=>s+x[1],0)||1;
+  const colors=['#6F8F7B','#C98383','#6F87A6','#C8A867','#88769A']; let acc=0;
+  const stops=entries.length?entries.map(([k,v],i)=>{const a=acc;acc+=v/total*100;return `${colors[i]} ${a}% ${acc}%`}).join(','):'#E7E0D4 0 100%';
+  return `<section class="section"><div class="section-title"><h2>Where My Money Goes</h2><span>เดือนนี้</span></div><div class="card donut-row"><div class="donut" style="background:conic-gradient(${stops})"></div><div class="legend">${entries.length?entries.map(([k,v],i)=>`<div class="legend-item"><span><i class="dot" style="background:${colors[i]}"></i>${esc(k)}</span><b>${Math.round(v/total*100)}%</b></div>`).join(''):'<div class="empty compact">ยังไม่มีรายจ่าย</div>'}</div></div></section>`
+}
+function budgetSummary(){
+  const budgets=currentBudgetMap(); const sums=monthlyExpenseByCategory();
+  const cats=Object.keys(budgets).filter(k=>Number(budgets[k])>0);
+  if(!cats.length)return `<section class="section"><div class="section-title"><h2>Budget vs Actual</h2><span>เดือนนี้</span></div><div class="card budget-empty"><b>ยังไม่ได้ตั้งงบ</b><p>ตั้งงบรายหมวดในหน้า Plan เพื่อเทียบงบกับรายจ่ายจริง</p><button class="secondary goPlan">ตั้งงบ</button></div></section>`;
+  const budgetTotal=cats.reduce((s,k)=>s+Number(budgets[k]||0),0); const actual=cats.reduce((s,k)=>s+Number(sums[k]||0),0); const p=budgetTotal?Math.round(actual/budgetTotal*100):0;
+  return `<section class="section"><div class="section-title"><h2>Budget vs Actual</h2><span>${p}%</span></div><div class="card"><div class="budget-kpis"><div><small>งบ</small><b>${THB(budgetTotal)}</b></div><div><small>ใช้จริง</small><b>${THB(actual)}</b></div><div><small>เหลือ</small><b>${THB(budgetTotal-actual)}</b></div></div><div class="bar budget ${p>100?'over':p>=80?'warn':''}"><i style="width:${Math.min(100,p)}%"></i></div></div></section>`
+}
+function healthCard(){
+  const t=totals(); const txMonths=new Set(data.transactions.filter(x=>x.date).map(x=>x.date.slice(0,7))).size;
+  const enough=t.income>0 && data.transactions.filter(x=>x.type==='expense').length>=3;
+  const g=data.goals.find(x=>x.name.includes('ฉุกเฉิน'))||data.goals[0]||{target:1,current:0};
+  const gp=Math.min(100,Math.round(Number(g.current||0)/(Number(g.target)||1)*100));
+  if(!enough){
+    return `<section class="section"><div class="section-title"><h2>Financial Health</h2><span>สูตรโปร่งใส</span></div><div class="card health"><div class="score neutral"><strong>—</strong></div><div class="health-copy"><h3>ข้อมูลยังไม่เพียงพอ</h3><p>ต้องมีรายรับอย่างน้อย 1 รายการ และรายจ่ายอย่างน้อย 3 รายการก่อน ระบบจึงจะให้คะแนน</p><div class="bar"><i style="width:${gp}%"></i></div><p style="margin-top:6px">${esc(g.name)} ${gp}%</p></div></div></section>`;
+  }
+  const savingRate=t.income>0?t.cashflow/t.income:0;
+  const expenseRatio=t.income>0?t.expense/t.income:1;
+  let score=0;
+  score+=Math.max(0,Math.min(40,Math.round(savingRate*100)));
+  score+=expenseRatio<=0.5?25:expenseRatio<=0.7?18:expenseRatio<=0.9?8:0;
+  score+=t.debtTotal===0?20:Math.max(0,20-Math.round((t.debtTotal/Math.max(t.assetTotal,1))*100));
+  score+=Math.round(gp*0.15);
+  score=Math.max(0,Math.min(100,score));
+  return `<section class="section"><div class="section-title"><h2>Financial Health</h2><span>คำนวณจากข้อมูลจริง</span></div><div class="card health"><div class="score" style="--score:${score}"><strong>${score}</strong></div><div class="health-copy"><h3>${score>=80?'Very Good':score>=60?'Good':'Needs Attention'} ${t.debtTotal===0?'· Debt Free ✓':''}</h3><p>Saving Rate ${Math.round(savingRate*100)}% · Expense Ratio ${Math.round(expenseRatio*100)}%${txMonths>1?` · มีข้อมูล ${txMonths} เดือน`:''}</p><div class="bar"><i style="width:${gp}%"></i></div><p style="margin-top:6px">${esc(g.name)} ${gp}%</p></div></div></section>`
+}
+function goalsSummary(){
+  const list=data.goals.slice(0,3);
+  return `<section class="section"><div class="section-title"><h2>Financial Goals</h2><span class="goPlan">ดูทั้งหมด</span></div><div class="card goal-list">${list.map(g=>{const p=Math.min(100,Math.round(Number(g.current||0)/(Number(g.target)||1)*100));return `<div class="goal-mini"><div><b>${esc(g.name)}</b><small>${THB(g.current)} / ${THB(g.target)}</small></div><strong>${p}%</strong></div>`}).join('')}</div></section>`
+}
 function recentTx(){const tx=[...data.transactions].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);return `<section class="section"><div class="section-title"><h2>Recent Transactions</h2><span id="seeAll">ดูทั้งหมด</span></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">เริ่มบันทึกรายการแรกด้วยปุ่ม +</div>'}</div></section>`}
-function txRow(x){const sign=x.type==='income'?'+':x.type==='expense'?'-':'';const cls=x.type==='income'?'pos':x.type==='expense'?'neg':'';return `<div class="tx" data-id="${x.id}"><div class="tx-ico">${iconFor(x.category)}</div><div class="tx-main"><b>${esc(x.category||x.type)}</b><small>${esc(x.account||'')} · ${esc(x.date||'')}</small></div><div class="amt ${cls}">${sign}${THB(x.amount)}</div></div>`}
-function transactions(){let tx=[...data.transactions].sort((a,b)=>(b.date||'').localeCompare(a.date||''));if(txFilter!=='all')tx=tx.filter(x=>x.type===txFilter);return `${header('Transactions','รายรับ รายจ่าย โอน และลงทุน')}<h2 class="page-title">รายการทั้งหมด</h2><div class="filters"><button class="chip ${txFilter==='all'?'active':''}" data-filter="all">ทั้งหมด</button><button class="chip ${txFilter==='income'?'active':''}" data-filter="income">รายรับ</button><button class="chip ${txFilter==='expense'?'active':''}" data-filter="expense">รายจ่าย</button><button class="chip ${txFilter==='transfer'?'active':''}" data-filter="transfer">โอน</button><button class="chip ${txFilter==='investment'?'active':''}" data-filter="investment">ลงทุน</button></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'}</div>`}
-function assets(){const kinds=[['cash','เงินสด/ธนาคาร','💵'],['stock','หุ้น/กองทุน','📈'],['gold','ทอง','🪙'],['property','ที่ดิน/อสังหาฯ','🏡'],['vehicle','รถ/ยานพาหนะ','🚙'],['other','ทรัพย์สินอื่น','◆']];return `${header('Assets','ทรัพย์สินและฐานะสุทธิ')}<h2 class="page-title">My Wealth</h2><div class="asset-grid">${kinds.map(([k,n,ic])=>{const v=data.assets.filter(a=>a.kind===k).reduce((s,a)=>s+Number(a.value||0),0);return `<div class="asset-card"><div class="a-label">${ic} ${n}</div><div class="a-value">${THB(v)}</div><div class="a-sub">${data.assets.filter(a=>a.kind===k).length} รายการ</div></div>`}).join('')}</div><section class="section"><div class="section-title"><h2>รายการทรัพย์สิน</h2><span id="addAsset">+ เพิ่ม</span></div><div class="card tx-list">${data.assets.length?data.assets.map(a=>`<div class="tx asset-row" data-id="${a.id}"><div class="tx-ico">◆</div><div class="tx-main"><b>${esc(a.name)}</b><small>${esc(a.kind)}</small></div><div class="amt">${THB(a.value)}</div></div>`).join(''):'<div class="empty">ยังไม่ได้บันทึกทรัพย์สิน</div>'}</div></section>`}
-function plan(){const g=data.goals[0]||{name:'เงินสำรองฉุกเฉิน',target:300000,current:0};const p=Math.min(100,Math.round(g.current/(g.target||1)*100));return `${header('Plan','Budget & Goals')}<h2 class="page-title">Financial Goals</h2><div class="card"><div class="label" style="color:var(--muted)">${esc(g.name)}</div><div style="font-size:28px;font-weight:760;margin-top:6px">${THB(g.current)}</div><div style="font-size:12px;color:var(--muted);margin-top:4px">เป้าหมาย ${THB(g.target)} · ${p}%</div><div class="bar"><i style="width:${p}%"></i></div><button class="secondary" id="editGoal">แก้ไขเป้าหมาย</button></div><section class="section"><div class="section-title"><h2>Budget vs Actual</h2><span>เตรียมไว้สำหรับ V1.1</span></div><div class="card"><p style="margin:0;color:var(--muted);font-size:13px;line-height:1.55">โครงข้อมูลรองรับงบประมาณรายหมวดแล้ว รุ่นนี้เน้นให้ระบบบันทึกรายการและฐานะสุทธิใช้งานได้เสถียรก่อน</p></div></section>`}
-function settings(){return `${header('More','Privacy, Backup & Settings')}<h2 class="page-title">Settings</h2><div class="settings-list"><div class="setting"><div><b>Auto Lock</b><small>ล็อกเมื่อออกจากแอปเกิน 1 นาที</small></div><input class="toggle" id="autoLock" type="checkbox" ${data.autoLock?'checked':''}></div><div class="setting"><div><b>Backup ข้อมูล</b><small>ดาวน์โหลดไฟล์ JSON เก็บไว้เอง</small></div><button id="exportBtn">Export</button></div><div class="setting"><div><b>Restore ข้อมูล</b><small>นำไฟล์ Backup กลับเข้าแอป</small></div><button id="importBtn">Import</button></div><div class="setting"><div><b>ล็อกทันที</b><small>กลับไปหน้า PIN</small></div><button id="lockNow">Lock</button></div><div class="setting"><div><b>เปลี่ยน PIN</b><small>ตั้งรหัสใหม่สำหรับเครื่องนี้</small></div><button id="changePin">Change</button></div></div><div class="notice">ข้อมูลแอปนี้ไม่ได้ส่งไปยังเซิร์ฟเวอร์ของผู้พัฒนา แต่การล้างข้อมูลเว็บไซต์/Safari อาจทำให้ข้อมูลในเครื่องหาย ควร Export Backup เป็นระยะ</div>`}
-function bottomNav(){const items=[['dashboard','⌂','Dashboard'],['transactions','☷','Transactions'],['add','+',''],['assets','◇','Assets'],['plan','◎','Plan']];return `<nav class="bottom">${items.map(([p,i,l])=>p==='add'?`<button class="add" id="quickAdd">+</button>`:`<button class="nav ${page===p?'active':''}" data-page="${p}"><span class="ico">${i}</span>${l}</button>`).join('')}</nav>`}
-function sheet(){if(modal==='tx')return txSheet();if(modal==='asset')return assetSheet();if(modal==='goal')return goalSheet();if(modal==='pin')return pinSheet();return ''}
-function txSheet(){return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>เพิ่มรายการ</h3><div class="type-grid">${[['income','💚','รายรับ'],['expense','🩷','รายจ่าย'],['transfer','🔄','โอนเงิน'],['investment','📈','ลงทุน']].map(([t,i,n],idx)=>`<button class="type ${idx===1?'sel':''}" data-txtype="${t}"><strong>${i}</strong>${n}</button>`).join('')}</div><form id="txForm"><input type="hidden" id="txType" value="expense"><div class="field"><label>จำนวนเงิน</label><input id="amount" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01" placeholder="0" required></div><div class="row2"><div class="field"><label>หมวด</label><select id="category"><option>อาหาร</option><option>เดินทาง</option><option>ครอบครัว</option><option>สุขภาพ</option><option>การศึกษา</option><option>ท่องเที่ยว</option><option>ภาษี</option><option>เงินเดือน</option><option>รายได้พิเศษ</option><option>ปันผล</option><option>ดอกเบี้ย</option><option>ลงทุน</option><option>อื่น ๆ</option></select></div><div class="field"><label>บัญชี</label><input id="account" placeholder="เช่น KBank / เงินสด"></div></div><div class="field"><label>วันที่</label><input id="date" type="date" value="${new Date().toISOString().slice(0,10)}"></div><div class="field"><label>หมายเหตุ</label><input id="note" placeholder="ไม่บังคับ"></div><button class="primary">บันทึก</button></form></div></div>`}
-function assetSheet(){return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>เพิ่มทรัพย์สิน</h3><form id="assetForm"><div class="field"><label>ชื่อ</label><input id="assetName" required placeholder="เช่น บัญชี KBank"></div><div class="field"><label>ประเภท</label><select id="assetKind"><option value="cash">เงินสด/ธนาคาร</option><option value="stock">หุ้น/กองทุน</option><option value="gold">ทอง</option><option value="property">ที่ดิน/อสังหาฯ</option><option value="vehicle">รถ/ยานพาหนะ</option><option value="other">ทรัพย์สินอื่น</option><option value="debt">หนี้สิน</option></select></div><div class="field"><label>มูลค่าปัจจุบัน</label><input id="assetValue" class="amount-input" type="number" inputmode="decimal" min="0" required></div><button class="primary">บันทึก</button></form></div></div>`}
-function goalSheet(){const g=data.goals[0];return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>แก้ไขเป้าหมาย</h3><form id="goalForm"><div class="field"><label>ชื่อเป้าหมาย</label><input id="goalName" value="${esc(g.name)}"></div><div class="field"><label>เป้าหมาย</label><input id="goalTarget" type="number" value="${g.target}"></div><div class="field"><label>ปัจจุบัน</label><input id="goalCurrent" type="number" value="${g.current}"></div><button class="primary">บันทึก</button></form></div></div>`}
-function pinSheet(){return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>เปลี่ยน PIN</h3><form id="pinForm"><div class="field"><label>PIN ใหม่ 4–6 หลัก</label><input id="newPin1" class="pin" type="password" inputmode="numeric" maxlength="6"></div><div class="field"><label>ยืนยัน PIN</label><input id="newPin2" class="pin" type="password" inputmode="numeric" maxlength="6"></div><button class="primary">บันทึก PIN</button></form></div></div>`}
+function txRow(x){const sign=x.type==='income'?'+':x.type==='expense'?'-':'';const cls=x.type==='income'?'pos':x.type==='expense'?'neg':'';return `<button class="tx tx-button" data-id="${x.id}" aria-label="เปิดรายการ"><div class="tx-ico">${iconFor(x.category)}</div><div class="tx-main"><b>${esc(x.category||typeLabel(x.type))}</b><small>${esc(x.account||'ไม่ระบุบัญชี')} · ${esc(x.date||'')}</small></div><div class="amt ${cls}">${sign}${THB(x.amount)}</div></button>`}
+function transactions(){let tx=[...data.transactions].sort((a,b)=>(b.date||'').localeCompare(a.date||''));if(txFilter!=='all')tx=tx.filter(x=>x.type===txFilter);return `${header('Transactions','รายรับ รายจ่าย โอน และลงทุน')}<div class="title-row"><h2 class="page-title">รายการทั้งหมด</h2><small>แตะรายการเพื่อแก้ไข/ลบ</small></div><div class="filters"><button class="chip ${txFilter==='all'?'active':''}" data-filter="all">ทั้งหมด</button><button class="chip ${txFilter==='income'?'active':''}" data-filter="income">รายรับ</button><button class="chip ${txFilter==='expense'?'active':''}" data-filter="expense">รายจ่าย</button><button class="chip ${txFilter==='transfer'?'active':''}" data-filter="transfer">โอน</button><button class="chip ${txFilter==='investment'?'active':''}" data-filter="investment">ลงทุน</button></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'}</div>`}
+function assets(){
+  const kinds=[['cash','เงินสด/ธนาคาร','💵'],['stock','หุ้น/กองทุน','📈'],['gold','ทอง','🪙'],['property','ที่ดิน/อสังหาฯ','🏡'],['vehicle','รถ/ยานพาหนะ','🚙'],['other','ทรัพย์สินอื่น','◆']];
+  const t=totals();
+  return `${header('Assets','ทรัพย์สินและฐานะสุทธิ')}<div class="title-row"><h2 class="page-title">My Wealth</h2><small>Net Worth ${THB(t.netWorth)}</small></div><div class="asset-grid">${kinds.map(([k,n,ic])=>{const list=data.assets.filter(a=>a.kind===k);const v=list.reduce((s,a)=>s+Number(a.value||0),0);return `<div class="asset-card"><div class="a-label">${ic} ${n}</div><div class="a-value">${THB(v)}</div><div class="a-sub">${list.length} รายการ</div></div>`}).join('')}</div>${t.debtTotal>0?`<section class="section"><div class="card debt-card"><small>หนี้สินรวม</small><b>${THB(t.debtTotal)}</b></div></section>`:''}<section class="section"><div class="section-title"><h2>รายการทรัพย์สิน</h2><span id="addAsset">+ เพิ่ม</span></div><div class="card tx-list">${data.assets.length?data.assets.map(a=>`<button class="tx tx-button asset-row" data-asset-id="${a.id}"><div class="tx-ico">${a.kind==='debt'?'−':'◆'}</div><div class="tx-main"><b>${esc(a.name)}</b><small>${esc(assetKindLabel(a.kind))}</small></div><div class="amt ${a.kind==='debt'?'neg':''}">${THB(a.value)}</div></button>`).join(''):'<div class="empty">ยังไม่ได้บันทึกทรัพย์สิน</div>'}</div></section>`
+}
+function plan(){
+  const budgets=currentBudgetMap(); const sums=monthlyExpenseByCategory();
+  const budgetRows=expenseCats.map(cat=>{const b=Number(budgets[cat]||0);const a=Number(sums[cat]||0);const p=b?Math.round(a/b*100):(a>0?999:0);return `<div class="budget-row"><div class="budget-head"><div><b>${esc(cat)}</b><small>ใช้จริง ${THB(a)}</small></div><button class="budget-edit" data-budget-cat="${esc(cat)}">${b?THB(b):'ตั้งงบ'}</button></div>${b?`<div class="bar budget ${p>100?'over':p>=80?'warn':''}"><i style="width:${Math.min(100,p)}%"></i></div><small class="budget-note">${p>100?`เกินงบ ${THB(a-b)}`:`เหลือ ${THB(b-a)} · ${p}%`}</small>`:''}</div>`}).join('');
+  return `${header('Plan','Budget & Goals')}<div class="title-row"><h2 class="page-title">Financial Goals</h2><button class="mini-add" id="addGoal">+ เพิ่ม</button></div><div class="goal-cards">${data.goals.length?data.goals.map(g=>{const p=Math.min(100,Math.round(Number(g.current||0)/(Number(g.target)||1)*100));return `<button class="card goal-card" data-goal-id="${g.id}"><div><div class="label goal-label">${esc(g.name)}</div><div class="goal-value">${THB(g.current)}</div><small>เป้าหมาย ${THB(g.target)} · ${p}%</small><div class="bar"><i style="width:${p}%"></i></div></div><span>›</span></button>`}).join(''):'<div class="card empty">ยังไม่มีเป้าหมาย</div>'}</div><section class="section"><div class="section-title"><h2>Budget vs Actual</h2><span>${new Date().toLocaleDateString('th-TH',{month:'long'})}</span></div><div class="card budget-list">${budgetRows}</div></section>`
+}
+function settings(){
+  const hasPin=!!data.pin;
+  return `${header('Settings','Privacy, Backup & App Lock')}<h2 class="page-title">ความเป็นส่วนตัวและข้อมูล</h2><div class="settings-list"><div class="setting"><div><b>App Lock</b><small>${hasPin?'มี PIN แล้ว':'ยังไม่ได้ตั้ง PIN'}</small></div><button id="${hasPin?'changePin':'setPin'}">${hasPin?'Change':'Set PIN'}</button></div><div class="setting"><div><b>Auto Lock</b><small>${hasPin?'ล็อกเมื่อออกจากแอปเกินเวลาที่กำหนด':'เปิดใช้ได้หลังตั้ง PIN'}</small></div><input class="toggle" id="autoLock" type="checkbox" ${data.autoLock?'checked':''} ${hasPin?'':'disabled'}></div><div class="setting"><div><b>เวลาล็อกอัตโนมัติ</b><small>หลังออกจากแอป</small></div><select id="lockMinutes" ${hasPin?'':'disabled'}><option value="1" ${data.autoLockMinutes==1?'selected':''}>1 นาที</option><option value="5" ${data.autoLockMinutes==5?'selected':''}>5 นาที</option><option value="15" ${data.autoLockMinutes==15?'selected':''}>15 นาที</option></select></div><div class="setting"><div><b>Backup ข้อมูล</b><small>ดาวน์โหลดไฟล์ JSON เก็บไว้เอง</small></div><button id="exportBtn">Export</button></div><div class="setting"><div><b>Restore ข้อมูล</b><small>นำไฟล์ Backup กลับเข้าแอป</small></div><button id="importBtn">Import</button></div><div class="setting"><div><b>บันทึก Snapshot เดือนนี้</b><small>เก็บ Net Worth เพื่อเทียบเดือนถัดไป</small></div><button id="snapshotBtn">Save</button></div>${hasPin?`<div class="setting"><div><b>ล็อกทันที</b><small>กลับไปหน้า PIN</small></div><button id="lockNow">Lock</button></div>`:''}</div><div class="notice"><b>Local-only</b><br>ข้อมูลไม่ถูก Sync โดยแอปนี้ แต่การล้างข้อมูลเว็บไซต์/Safari หรือลบข้อมูลของ PWA อาจทำให้ข้อมูลหาย ควร Export Backup เป็นระยะ</div><div class="version">MY FINANCE v${APP_VERSION}</div>`
+}
+function bottomNav(){
+  const items=[['dashboard','⌂','Dashboard'],['transactions','☷','Transactions'],['add','+',''],['assets','◇','Assets'],['plan','◎','Plan']];
+  return `<nav class="bottom">${items.map(([p,i,l])=>p==='add'?`<button class="add" id="quickAdd">+</button>`:`<button class="nav ${page===p?'active':''}" data-page="${p}"><span class="ico">${i}</span>${l}</button>`).join('')}</nav>`
+}
+function sheet(){
+  if(modal==='tx'||modal==='editTx')return txSheet();
+  if(modal==='asset'||modal==='editAsset')return assetSheet();
+  if(modal==='goal'||modal==='editGoal')return goalSheet();
+  if(modal==='budget')return budgetSheet();
+  if(modal==='pin')return pinSheet();
+  return '';
+}
+function txSheet(){
+  const editing=modal==='editTx';
+  const x=editing?data.transactions.find(t=>t.id===editId):null;
+  const type=x?.type||'expense';
+  const cats=type==='income'?incomeCats:expenseCats;
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขรายการ':'เพิ่มรายการ'}</h3><div class="type-grid">${[['income','💚','รายรับ'],['expense','🩷','รายจ่าย'],['transfer','🔄','โอนเงิน'],['investment','📈','ลงทุน']].map(([t,i,n])=>`<button class="type ${type===t?'sel':''}" data-txtype="${t}"><strong>${i}</strong>${n}</button>`).join('')}</div><form id="txForm"><input type="hidden" id="txType" value="${type}"><div class="field"><label>จำนวนเงิน</label><input id="amount" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01" placeholder="0" value="${x?Number(x.amount||0):''}" required></div><div class="row2"><div class="field"><label>หมวด</label><select id="category">${cats.map(c=>`<option ${x?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>บัญชี</label><input id="account" placeholder="เช่น KBank / เงินสด" value="${esc(x?.account||'')}"></div></div><div class="field"><label>วันที่</label><input id="date" type="date" value="${x?.date||today()}"></div><div class="field"><label>หมายเหตุ</label><input id="note" placeholder="ไม่บังคับ" value="${esc(x?.note||'')}"></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteTx">ลบรายการนี้</button>`:''}</form></div></div>`
+}
+function assetSheet(){
+  const editing=modal==='editAsset'; const a=editing?data.assets.find(x=>x.id===editId):null;
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขทรัพย์สิน':'เพิ่มทรัพย์สิน'}</h3><form id="assetForm"><div class="field"><label>ชื่อ</label><input id="assetName" required placeholder="เช่น บัญชี KBank" value="${esc(a?.name||'')}"></div><div class="field"><label>ประเภท</label><select id="assetKind">${[['cash','เงินสด/ธนาคาร'],['stock','หุ้น/กองทุน'],['gold','ทอง'],['property','ที่ดิน/อสังหาฯ'],['vehicle','รถ/ยานพาหนะ'],['other','ทรัพย์สินอื่น'],['debt','หนี้สิน']].map(([v,n])=>`<option value="${v}" ${a?.kind===v?'selected':''}>${n}</option>`).join('')}</select></div><div class="field"><label>มูลค่าปัจจุบัน</label><input id="assetValue" class="amount-input" type="number" inputmode="decimal" min="0" value="${a?Number(a.value||0):''}" required></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteAsset">ลบรายการนี้</button>`:''}</form></div></div>`
+}
+function goalSheet(){
+  const editing=modal==='editGoal'; const g=editing?data.goals.find(x=>x.id===editId):null;
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขเป้าหมาย':'เพิ่มเป้าหมาย'}</h3><form id="goalForm"><div class="field"><label>ชื่อเป้าหมาย</label><input id="goalName" value="${esc(g?.name||'')}" placeholder="เช่น เงินเที่ยวต่างประเทศ" required></div><div class="field"><label>เป้าหมาย</label><input id="goalTarget" type="number" min="0" value="${g?Number(g.target||0):''}" required></div><div class="field"><label>ปัจจุบัน</label><input id="goalCurrent" type="number" min="0" value="${g?Number(g.current||0):0}" required></div><button class="primary">บันทึก</button>${editing?`<button type="button" class="danger" id="deleteGoal">ลบเป้าหมายนี้</button>`:''}</form></div></div>`
+}
+function budgetSheet(){
+  const cat=editId; const current=Number(currentBudgetMap()[cat]||0);
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${esc(cat)}</h3><form id="budgetForm"><div class="field"><label>งบประมาณเดือนนี้</label><input id="budgetAmount" class="amount-input" type="number" min="0" value="${current||''}" placeholder="0" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearBudget">ล้างงบหมวดนี้</button>`:''}</form></div></div>`
+}
+function pinSheet(){
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${data.pin?'เปลี่ยน PIN':'ตั้ง PIN'}</h3><form id="pinForm"><div class="field"><label>PIN ใหม่ 4–6 หลัก</label><input id="newPin1" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><div class="field"><label>ยืนยัน PIN</label><input id="newPin2" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><button class="primary">บันทึก PIN</button></form></div></div>`
+}
+function updateCategoryOptions(type,selected=''){
+  const c=$('#category'); if(!c)return;
+  const cats=type==='income'?incomeCats:type==='investment'?['ลงทุน','อื่น ๆ']:type==='transfer'?['โอนเงิน','อื่น ๆ']:expenseCats;
+  c.innerHTML=cats.map(x=>`<option ${selected===x?'selected':''}>${esc(x)}</option>`).join('');
+}
+
 function bind(){
-  const $=(s)=>document.querySelector(s), $$=(s)=>[...document.querySelectorAll(s)];
-  if(!unlocked){$('#setupPin')?.addEventListener('click',()=>{const a=$('#pin1').value,b=$('#pin2').value;if(!/^\d{4,6}$/.test(a))return alert('PIN ต้องเป็นตัวเลข 4–6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');data.pin=a;save();unlocked=true;render()});const unlock=()=>{if($('#unlockPin').value===data.pin){unlocked=true;data.lastActive=Date.now();render()}else alert('PIN ไม่ถูกต้อง')};$('#unlockBtn')?.addEventListener('click',unlock);$('#unlockPin')?.addEventListener('keydown',e=>e.key==='Enter'&&unlock());return}
+  if(!unlocked){
+    $('#enterWithoutPin')?.addEventListener('click',()=>{unlocked=true;render()});
+    const unlock=()=>{if($('#unlockPin')?.value===data.pin){unlocked=true;data.lastActive=Date.now();render()}else alert('PIN ไม่ถูกต้อง')};
+    $('#unlockBtn')?.addEventListener('click',unlock); $('#unlockPin')?.addEventListener('keydown',e=>e.key==='Enter'&&unlock());
+    return;
+  }
   $$('.nav').forEach(b=>b.addEventListener('click',()=>{page=b.dataset.page;render()}));
-  $('#quickAdd')?.addEventListener('click',()=>{modal='tx';render()});
+  $('#openSettings')?.addEventListener('click',()=>{page='settings';render()});
+  $('#quickAdd')?.addEventListener('click',()=>{modal='tx';editId=null;render()});
   $('#seeAll')?.addEventListener('click',()=>{page='transactions';render()});
+  $$('.goPlan').forEach(b=>b.addEventListener('click',()=>{page='plan';render()}));
   $$('[data-filter]').forEach(b=>b.addEventListener('click',()=>{txFilter=b.dataset.filter;render()}));
-  $('#addAsset')?.addEventListener('click',()=>{modal='asset';render()});
-  $('#editGoal')?.addEventListener('click',()=>{modal='goal';render()});
-  $('#sheetBack')?.addEventListener('click',e=>{if(e.target.id==='sheetBack'){modal=null;render()}});
-  $$('[data-txtype]').forEach(b=>b.addEventListener('click',()=>{$$('[data-txtype]').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');$('#txType').value=b.dataset.txtype;const c=$('#category');if(b.dataset.txtype==='income')c.value='เงินเดือน';else if(b.dataset.txtype==='investment')c.value='ลงทุน';else if(b.dataset.txtype==='transfer')c.value='อื่น ๆ';else c.value='อาหาร'}));
-  $('#txForm')?.addEventListener('submit',e=>{e.preventDefault();data.transactions.push({id:uid(),type:$('#txType').value,amount:Number($('#amount').value),category:$('#category').value,account:$('#account').value.trim(),date:$('#date').value,note:$('#note').value.trim()});save();modal=null;render()});
-  $('#assetForm')?.addEventListener('submit',e=>{e.preventDefault();data.assets.push({id:uid(),name:$('#assetName').value.trim(),kind:$('#assetKind').value,value:Number($('#assetValue').value)});save();modal=null;render()});
-  $('#goalForm')?.addEventListener('submit',e=>{e.preventDefault();data.goals[0]={id:'g1',name:$('#goalName').value.trim()||'เป้าหมาย',target:Number($('#goalTarget').value)||0,current:Number($('#goalCurrent').value)||0};save();modal=null;render()});
-  $('#autoLock')?.addEventListener('change',e=>{data.autoLock=e.target.checked;save()});
-  $('#lockNow')?.addEventListener('click',()=>{unlocked=false;render()});
+  $$('[data-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.id;modal='editTx';render()}));
+  $('#addAsset')?.addEventListener('click',()=>{modal='asset';editId=null;render()});
+  $$('[data-asset-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.assetId;modal='editAsset';render()}));
+  $('#addGoal')?.addEventListener('click',()=>{modal='goal';editId=null;render()});
+  $$('[data-goal-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.goalId;modal='editGoal';render()}));
+  $$('[data-budget-cat]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.budgetCat;modal='budget';render()}));
+  $('#sheetBack')?.addEventListener('click',e=>{if(e.target.id==='sheetBack'){modal=null;editId=null;render()}});
+  $$('[data-txtype]').forEach(b=>b.addEventListener('click',()=>{$$('[data-txtype]').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');$('#txType').value=b.dataset.txtype;updateCategoryOptions(b.dataset.txtype)}));
+
+  $('#txForm')?.addEventListener('submit',e=>{
+    e.preventDefault();
+    const row={id:editId||uid(),type:$('#txType').value,amount:Number($('#amount').value),category:$('#category').value,account:$('#account').value.trim(),date:$('#date').value,note:$('#note').value.trim()};
+    if(!row.amount||row.amount<0)return alert('กรุณาใส่จำนวนเงินมากกว่า 0');
+    if(modal==='editTx'){const i=data.transactions.findIndex(x=>x.id===editId);if(i>=0)data.transactions[i]=row}else data.transactions.push(row);
+    save(); modal=null; editId=null; render();
+  });
+  $('#deleteTx')?.addEventListener('click',()=>{if(confirm('ลบรายการนี้ใช่หรือไม่?')){data.transactions=data.transactions.filter(x=>x.id!==editId);save();modal=null;editId=null;render()}});
+
+  $('#assetForm')?.addEventListener('submit',e=>{
+    e.preventDefault(); const row={id:editId||uid(),name:$('#assetName').value.trim(),kind:$('#assetKind').value,value:Number($('#assetValue').value)};
+    if(!row.name)return alert('กรุณาใส่ชื่อทรัพย์สิน');
+    if(modal==='editAsset'){const i=data.assets.findIndex(x=>x.id===editId);if(i>=0)data.assets[i]=row}else data.assets.push(row);
+    snapshotCurrentMonth(); save(); modal=null; editId=null; render();
+  });
+  $('#deleteAsset')?.addEventListener('click',()=>{if(confirm('ลบทรัพย์สินนี้ใช่หรือไม่?')){data.assets=data.assets.filter(x=>x.id!==editId);snapshotCurrentMonth();save();modal=null;editId=null;render()}});
+
+  $('#goalForm')?.addEventListener('submit',e=>{
+    e.preventDefault(); const row={id:editId||uid(),name:$('#goalName').value.trim(),target:Number($('#goalTarget').value)||0,current:Number($('#goalCurrent').value)||0};
+    if(modal==='editGoal'){const i=data.goals.findIndex(x=>x.id===editId);if(i>=0)data.goals[i]=row}else data.goals.push(row);
+    save(); modal=null; editId=null; render();
+  });
+  $('#deleteGoal')?.addEventListener('click',()=>{if(data.goals.length<=1)return alert('ต้องมีอย่างน้อย 1 เป้าหมาย');if(confirm('ลบเป้าหมายนี้ใช่หรือไม่?')){data.goals=data.goals.filter(x=>x.id!==editId);save();modal=null;editId=null;render()}});
+
+  $('#budgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.budgets[key])data.budgets[key]={};data.budgets[key][editId]=Number($('#budgetAmount').value)||0;save();modal=null;editId=null;render()});
+  $('#clearBudget')?.addEventListener('click',()=>{const key=monthKey();if(data.budgets[key])delete data.budgets[key][editId];save();modal=null;editId=null;render()});
+
+  $('#setPin')?.addEventListener('click',()=>{modal='pin';render()});
   $('#changePin')?.addEventListener('click',()=>{modal='pin';render()});
-  $('#pinForm')?.addEventListener('submit',e=>{e.preventDefault();const a=$('#newPin1').value,b=$('#newPin2').value;if(!/^\d{4,6}$/.test(a))return alert('PIN ต้องเป็นตัวเลข 4–6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');data.pin=a;save();modal=null;render()});
-  $('#exportBtn')?.addEventListener('click',()=>{const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)});
+  $('#pinForm')?.addEventListener('submit',e=>{e.preventDefault();const a=$('#newPin1').value,b=$('#newPin2').value;if(!/^\d{4,6}$/.test(a))return alert('PIN ต้องเป็นตัวเลข 4–6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');data.pin=a;data.autoLock=true;save();modal=null;render()});
+  $('#autoLock')?.addEventListener('change',e=>{data.autoLock=e.target.checked;save()});
+  $('#lockMinutes')?.addEventListener('change',e=>{data.autoLockMinutes=Number(e.target.value)||1;save()});
+  $('#lockNow')?.addEventListener('click',()=>{data.lastActive=Date.now();save();unlocked=false;render()});
+  $('#snapshotBtn')?.addEventListener('click',()=>{snapshotCurrentMonth();save();alert('บันทึก Snapshot เดือนนี้แล้ว');render()});
+  $('#exportBtn')?.addEventListener('click',()=>{snapshotCurrentMonth();save();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});
   $('#importBtn')?.addEventListener('click',()=>document.getElementById('importFile').click());
 }
-document.getElementById('importFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const obj=JSON.parse(await f.text());if(!obj||!Array.isArray(obj.transactions)||!Array.isArray(obj.assets))throw 0;if(confirm('Restore จะทับข้อมูลปัจจุบัน ต้องการดำเนินการหรือไม่?')){data={...defaultData,...obj};save();render()}}catch{alert('ไฟล์ Backup ไม่ถูกต้อง')}e.target.value=''})
-document.addEventListener('visibilitychange',()=>{if(document.hidden){data.lastActive=Date.now();save()}else if(data.autoLock&&data.pin&&Date.now()-Number(data.lastActive||0)>60000){unlocked=false;render()}});
+
+document.getElementById('importFile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f)return;
+  try{
+    const obj=JSON.parse(await f.text());
+    if(!obj||!Array.isArray(obj.transactions)||!Array.isArray(obj.assets))throw new Error('invalid');
+    if(confirm('Restore จะทับข้อมูลปัจจุบันทั้งหมด ต้องการดำเนินการหรือไม่?')){data=migrate(obj);save();unlocked=!data.pin;page='dashboard';render()}
+  }catch{alert('ไฟล์ Backup ไม่ถูกต้อง')}
+  e.target.value='';
+});
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){data.lastActive=Date.now();save()}
+  else if(data.autoLock&&data.pin){const ms=(Number(data.autoLockMinutes)||1)*60000;if(Date.now()-Number(data.lastActive||0)>ms){unlocked=false;render()}}
+});
+
+window.addEventListener('beforeunload',()=>{data.lastActive=Date.now();save()});
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 render();
