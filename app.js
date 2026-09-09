@@ -1,6 +1,7 @@
 const DB_KEY='myfinance_v1';
-const APP_VERSION='1.1.0';
-const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','อื่น ๆ'];
+const APP_VERSION='1.2.0';
+const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
+const projects=['ส่วนตัว/ทั่วไป','บ้าน กทม.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','Polar Farm'];
 const incomeCats=['เงินเดือน','รายได้พิเศษ','ปันผล','ดอกเบี้ย','ค่าเช่า','ขายทรัพย์สิน','อื่น ๆ'];
 const defaultData={
   version:APP_VERSION,
@@ -12,6 +13,7 @@ const defaultData={
   assets:[],
   goals:[{id:'g1',name:'เงินสำรองฉุกเฉิน',target:300000,current:0}],
   budgets:{},
+  projectBudgets:{},
   snapshots:[],
   settings:{currency:'THB',hideZeroDebt:true}
 };
@@ -35,6 +37,7 @@ function migrate(raw){
   merged.assets=Array.isArray(raw.assets)?raw.assets:[];
   merged.goals=Array.isArray(raw.goals)&&raw.goals.length?raw.goals:clone(defaultData.goals);
   merged.budgets=raw.budgets&&typeof raw.budgets==='object'?raw.budgets:{};
+  merged.projectBudgets=raw.projectBudgets&&typeof raw.projectBudgets==='object'?raw.projectBudgets:{};
   merged.snapshots=Array.isArray(raw.snapshots)?raw.snapshots:[];
   merged.settings={...defaultData.settings,...(raw.settings||{})};
   merged.version=APP_VERSION;
@@ -55,7 +58,7 @@ function monthKey(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()
 function inCurrentMonth(t){return (t.date||'').slice(0,7)===monthKey()}
 function esc(s=''){return String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function typeLabel(t){return ({income:'รายรับ',expense:'รายจ่าย',transfer:'โอนเงิน',investment:'ลงทุน'})[t]||t}
-function iconFor(cat){const m={'อาหาร':'🍜','เดินทาง':'🚗','ครอบครัว':'👨‍👩‍👧','สุขภาพ':'🩺','การศึกษา':'📚','ท่องเที่ยว':'✈️','ภาษี':'🧾','ของใช้ส่วนตัว':'🧴','ค่าสาธารณูปโภค':'💡','เงินเดือน':'💼','ปันผล':'💹','ดอกเบี้ย':'🏦','รายได้พิเศษ':'✨','ค่าเช่า':'🏠','ขายทรัพย์สิน':'🏷️','ลงทุน':'📈','โอนเงิน':'🔄','อื่น ๆ':'•'};return m[cat]||'•'}
+function iconFor(cat){const m={'อาหาร':'🍜','เดินทาง':'🚗','ครอบครัว':'👨‍👩‍👧','สุขภาพ':'🩺','การศึกษา':'📚','ท่องเที่ยว':'✈️','ภาษี':'🧾','ของใช้ส่วนตัว':'🧴','ค่าสาธารณูปโภค':'💡','ค่าซ่อม/บำรุง':'🛠️','ค่าแรง':'👷','วัสดุ/อุปกรณ์':'🧰','ปุ๋ย/ต้นไม้':'🌱','อาหารสัตว์':'🌾','เงินเดือน':'💼','ปันผล':'💹','ดอกเบี้ย':'🏦','รายได้พิเศษ':'✨','ค่าเช่า':'🏠','ขายทรัพย์สิน':'🏷️','ลงทุน':'📈','โอนเงิน':'🔄','อื่น ๆ':'•'};return m[cat]||'•'}
 function assetKindLabel(k){return ({cash:'เงินสด/ธนาคาร',stock:'หุ้น/กองทุน',gold:'ทอง',property:'ที่ดิน/อสังหาฯ',vehicle:'รถ/ยานพาหนะ',other:'ทรัพย์สินอื่น',debt:'หนี้สิน'})[k]||k}
 
 function totals(){
@@ -74,6 +77,8 @@ function monthlyExpenseByCategory(){
   return sums;
 }
 function currentBudgetMap(){return data.budgets[monthKey()]||{}}
+function currentProjectBudgetMap(){return data.projectBudgets[monthKey()]||{}}
+function projectStats(name){const tx=data.transactions.filter(x=>inCurrentMonth(x)&&(x.project||'ส่วนตัว/ทั่วไป')===name);const income=tx.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount||0),0);const expense=tx.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount||0),0);return {income,expense,net:income-expense}}
 function snapshotCurrentMonth(){
   const t=totals(); const key=monthKey();
   const row={month:key,netWorth:t.netWorth,assetTotal:t.assetTotal,debtTotal:t.debtTotal,updatedAt:new Date().toISOString()};
@@ -96,7 +101,7 @@ function dashboard(){
   const prevKey=(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return monthKey(d)})();
   const prev=data.snapshots.find(s=>s.month===prevKey);
   const pct=prev&&Number(prev.netWorth)!==0?((t.netWorth-Number(prev.netWorth))/Math.abs(Number(prev.netWorth))*100):null;
-  return `${header()}<section class="hero"><div class="label">Net Worth</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section><div class="grid3"><div class="mini income"><div class="t">รายรับ</div><div class="v">${THB(t.income)}</div></div><div class="mini expense"><div class="t">รายจ่าย</div><div class="v">${THB(t.expense)}</div></div><div class="mini cashflow"><div class="t">Cash Flow</div><div class="v">${THB(t.cashflow)}</div></div></div>${cashChart()}${spendingCard()}${budgetSummary()}${healthCard()}${goalsSummary()}${recentTx()}`
+  return `${header()}<section class="hero"><div class="label">Net Worth</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section><div class="grid3"><div class="mini income"><div class="t">รายรับ</div><div class="v">${THB(t.income)}</div></div><div class="mini expense"><div class="t">รายจ่าย</div><div class="v">${THB(t.expense)}</div></div><div class="mini cashflow"><div class="t">Cash Flow</div><div class="v">${THB(t.cashflow)}</div></div></div>${cashChart()}${spendingCard()}${projectDashboard()}${budgetSummary()}${healthCard()}${goalsSummary()}${recentTx()}`
 }
 function cashChart(){
   const vals=[];
@@ -113,6 +118,12 @@ function spendingCard(){
   const stops=entries.length?entries.map(([k,v],i)=>{const a=acc;acc+=v/total*100;return `${colors[i]} ${a}% ${acc}%`}).join(','):'#E7E0D4 0 100%';
   return `<section class="section"><div class="section-title"><h2>Where My Money Goes</h2><span>เดือนนี้</span></div><div class="card donut-row"><div class="donut" style="background:conic-gradient(${stops})"></div><div class="legend">${entries.length?entries.map(([k,v],i)=>`<div class="legend-item"><span><i class="dot" style="background:${colors[i]}"></i>${esc(k)}</span><b>${Math.round(v/total*100)}%</b></div>`).join(''):'<div class="empty compact">ยังไม่มีรายจ่าย</div>'}</div></div></section>`
 }
+function projectDashboard(){
+  const active=projects.map(name=>({name,...projectStats(name)})).filter(x=>x.income||x.expense);
+  if(!active.length)return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>เดือนนี้</span></div><div class="card budget-empty"><b>ยังไม่มีรายการแยกโครงการ</b><p>เวลาบันทึกรายรับ/รายจ่าย เลือก บ้าน กทม., บ้าน เกษตรวิสัย, เลี้ยงไก่, ป่ายาง หรือ Polar Farm ได้</p></div></section>`;
+  return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>เดือนนี้</span></div><div class="card tx-list">${active.map(x=>`<div class="tx"><div class="tx-ico">${projectIcon(x.name)}</div><div class="tx-main"><b>${esc(x.name)}</b><small>รับ ${THB(x.income)} · จ่าย ${THB(x.expense)}</small></div><div class="amt ${x.net>=0?'pos':'neg'}">${x.net>=0?'+':''}${THB(x.net)}</div></div>`).join('')}</div></section>`
+}
+function projectIcon(n){return ({'บ้าน กทม.':'🏙️','บ้าน เกษตรวิสัย':'🏡','เลี้ยงไก่':'🐓','ป่ายาง':'🌳','Polar Farm':'🌾','ส่วนตัว/ทั่วไป':'👤'})[n]||'◆'}
 function budgetSummary(){
   const budgets=currentBudgetMap(); const sums=monthlyExpenseByCategory();
   const cats=Object.keys(budgets).filter(k=>Number(budgets[k])>0);
@@ -143,7 +154,7 @@ function goalsSummary(){
   return `<section class="section"><div class="section-title"><h2>Financial Goals</h2><span class="goPlan">ดูทั้งหมด</span></div><div class="card goal-list">${list.map(g=>{const p=Math.min(100,Math.round(Number(g.current||0)/(Number(g.target)||1)*100));return `<div class="goal-mini"><div><b>${esc(g.name)}</b><small>${THB(g.current)} / ${THB(g.target)}</small></div><strong>${p}%</strong></div>`}).join('')}</div></section>`
 }
 function recentTx(){const tx=[...data.transactions].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);return `<section class="section"><div class="section-title"><h2>Recent Transactions</h2><span id="seeAll">ดูทั้งหมด</span></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">เริ่มบันทึกรายการแรกด้วยปุ่ม +</div>'}</div></section>`}
-function txRow(x){const sign=x.type==='income'?'+':x.type==='expense'?'-':'';const cls=x.type==='income'?'pos':x.type==='expense'?'neg':'';return `<button class="tx tx-button" data-id="${x.id}" aria-label="เปิดรายการ"><div class="tx-ico">${iconFor(x.category)}</div><div class="tx-main"><b>${esc(x.category||typeLabel(x.type))}</b><small>${esc(x.account||'ไม่ระบุบัญชี')} · ${esc(x.date||'')}</small></div><div class="amt ${cls}">${sign}${THB(x.amount)}</div></button>`}
+function txRow(x){const sign=x.type==='income'?'+':x.type==='expense'?'-':'';const cls=x.type==='income'?'pos':x.type==='expense'?'neg':'';return `<button class="tx tx-button" data-id="${x.id}" aria-label="เปิดรายการ"><div class="tx-ico">${iconFor(x.category)}</div><div class="tx-main"><b>${esc(x.category||typeLabel(x.type))}</b><small>${esc(x.account||'ไม่ระบุบัญชี')} · ${esc(x.project||'ส่วนตัว/ทั่วไป')} · ${esc(x.date||'')}</small></div><div class="amt ${cls}">${sign}${THB(x.amount)}</div></button>`}
 function transactions(){let tx=[...data.transactions].sort((a,b)=>(b.date||'').localeCompare(a.date||''));if(txFilter!=='all')tx=tx.filter(x=>x.type===txFilter);return `${header('Transactions','รายรับ รายจ่าย โอน และลงทุน')}<div class="title-row"><h2 class="page-title">รายการทั้งหมด</h2><small>แตะรายการเพื่อแก้ไข/ลบ</small></div><div class="filters"><button class="chip ${txFilter==='all'?'active':''}" data-filter="all">ทั้งหมด</button><button class="chip ${txFilter==='income'?'active':''}" data-filter="income">รายรับ</button><button class="chip ${txFilter==='expense'?'active':''}" data-filter="expense">รายจ่าย</button><button class="chip ${txFilter==='transfer'?'active':''}" data-filter="transfer">โอน</button><button class="chip ${txFilter==='investment'?'active':''}" data-filter="investment">ลงทุน</button></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'}</div>`}
 function assets(){
   const kinds=[['cash','เงินสด/ธนาคาร','💵'],['stock','หุ้น/กองทุน','📈'],['gold','ทอง','🪙'],['property','ที่ดิน/อสังหาฯ','🏡'],['vehicle','รถ/ยานพาหนะ','🚙'],['other','ทรัพย์สินอื่น','◆']];
@@ -153,7 +164,12 @@ function assets(){
 function plan(){
   const budgets=currentBudgetMap(); const sums=monthlyExpenseByCategory();
   const budgetRows=expenseCats.map(cat=>{const b=Number(budgets[cat]||0);const a=Number(sums[cat]||0);const p=b?Math.round(a/b*100):(a>0?999:0);return `<div class="budget-row"><div class="budget-head"><div><b>${esc(cat)}</b><small>ใช้จริง ${THB(a)}</small></div><button class="budget-edit" data-budget-cat="${esc(cat)}">${b?THB(b):'ตั้งงบ'}</button></div>${b?`<div class="bar budget ${p>100?'over':p>=80?'warn':''}"><i style="width:${Math.min(100,p)}%"></i></div><small class="budget-note">${p>100?`เกินงบ ${THB(a-b)}`:`เหลือ ${THB(b-a)} · ${p}%`}</small>`:''}</div>`}).join('');
-  return `${header('Plan','Budget & Goals')}<div class="title-row"><h2 class="page-title">Financial Goals</h2><button class="mini-add" id="addGoal">+ เพิ่ม</button></div><div class="goal-cards">${data.goals.length?data.goals.map(g=>{const p=Math.min(100,Math.round(Number(g.current||0)/(Number(g.target)||1)*100));return `<button class="card goal-card" data-goal-id="${g.id}"><div><div class="label goal-label">${esc(g.name)}</div><div class="goal-value">${THB(g.current)}</div><small>เป้าหมาย ${THB(g.target)} · ${p}%</small><div class="bar"><i style="width:${p}%"></i></div></div><span>›</span></button>`}).join(''):'<div class="card empty">ยังไม่มีเป้าหมาย</div>'}</div><section class="section"><div class="section-title"><h2>Budget vs Actual</h2><span>${new Date().toLocaleDateString('th-TH',{month:'long'})}</span></div><div class="card budget-list">${budgetRows}</div></section>`
+  return `${header('Plan','Budget & Goals')}<div class="title-row"><h2 class="page-title">Financial Goals</h2><button class="mini-add" id="addGoal">+ เพิ่ม</button></div><div class="goal-cards">${data.goals.length?data.goals.map(g=>{const p=Math.min(100,Math.round(Number(g.current||0)/(Number(g.target)||1)*100));return `<button class="card goal-card" data-goal-id="${g.id}"><div><div class="label goal-label">${esc(g.name)}</div><div class="goal-value">${THB(g.current)}</div><small>เป้าหมาย ${THB(g.target)} · ${p}%</small><div class="bar"><i style="width:${p}%"></i></div></div><span>›</span></button>`}).join(''):'<div class="card empty">ยังไม่มีเป้าหมาย</div>'}</div>${projectPlan()}<section class="section"><div class="section-title"><h2>Budget vs Actual</h2><span>${new Date().toLocaleDateString('th-TH',{month:'long'})}</span></div><div class="card budget-list">${budgetRows}</div></section>`
+}
+function projectPlan(){
+  const pb=currentProjectBudgetMap();
+  const rows=projects.filter(x=>x!=='ส่วนตัว/ทั่วไป').map(name=>{const st=projectStats(name),b=Number(pb[name]||0),p=b?Math.round(st.expense/b*100):0;return `<div class="budget-row"><div class="budget-head"><div><b>${projectIcon(name)} ${esc(name)}</b><small>รับ ${THB(st.income)} · ใช้ ${THB(st.expense)} · สุทธิ ${THB(st.net)}</small></div><button class="budget-edit" data-project-budget="${esc(name)}">${b?THB(b):'ตั้งงบ'}</button></div>${b?`<div class="bar budget ${p>100?'over':p>=80?'warn':''}"><i style="width:${Math.min(100,p)}%"></i></div><small class="budget-note">${p>100?`เกินงบ ${THB(st.expense-b)}`:`เหลือ ${THB(b-st.expense)} · ${p}%`}</small>`:''}</div>`}).join('');
+  return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>งบแยกพื้นที่/กิจการ</span></div><div class="card budget-list">${rows}</div></section>`
 }
 function settings(){
   const hasPin=!!data.pin;
@@ -168,6 +184,7 @@ function sheet(){
   if(modal==='asset'||modal==='editAsset')return assetSheet();
   if(modal==='goal'||modal==='editGoal')return goalSheet();
   if(modal==='budget')return budgetSheet();
+  if(modal==='projectBudget')return projectBudgetSheet();
   if(modal==='pin')return pinSheet();
   return '';
 }
@@ -176,7 +193,7 @@ function txSheet(){
   const x=editing?data.transactions.find(t=>t.id===editId):null;
   const type=x?.type||'expense';
   const cats=type==='income'?incomeCats:expenseCats;
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขรายการ':'เพิ่มรายการ'}</h3><div class="type-grid">${[['income','💚','รายรับ'],['expense','🩷','รายจ่าย'],['transfer','🔄','โอนเงิน'],['investment','📈','ลงทุน']].map(([t,i,n])=>`<button class="type ${type===t?'sel':''}" data-txtype="${t}"><strong>${i}</strong>${n}</button>`).join('')}</div><form id="txForm"><input type="hidden" id="txType" value="${type}"><div class="field"><label>จำนวนเงิน</label><input id="amount" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01" placeholder="0" value="${x?Number(x.amount||0):''}" required></div><div class="row2"><div class="field"><label>หมวด</label><select id="category">${cats.map(c=>`<option ${x?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>บัญชี</label><input id="account" placeholder="เช่น KBank / เงินสด" value="${esc(x?.account||'')}"></div></div><div class="field"><label>วันที่</label><input id="date" type="date" value="${x?.date||today()}"></div><div class="field"><label>หมายเหตุ</label><input id="note" placeholder="ไม่บังคับ" value="${esc(x?.note||'')}"></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteTx">ลบรายการนี้</button>`:''}</form></div></div>`
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขรายการ':'เพิ่มรายการ'}</h3><div class="type-grid">${[['income','💚','รายรับ'],['expense','🩷','รายจ่าย'],['transfer','🔄','โอนเงิน'],['investment','📈','ลงทุน']].map(([t,i,n])=>`<button class="type ${type===t?'sel':''}" data-txtype="${t}"><strong>${i}</strong>${n}</button>`).join('')}</div><form id="txForm"><input type="hidden" id="txType" value="${type}"><div class="field"><label>จำนวนเงิน</label><input id="amount" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01" placeholder="0" value="${x?Number(x.amount||0):''}" required></div><div class="row2"><div class="field"><label>หมวด</label><select id="category">${cats.map(c=>`<option ${x?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>บัญชี</label><input id="account" placeholder="เช่น KBank / เงินสด" value="${esc(x?.account||'')}"></div></div><div class="field"><label>โครงการ / สถานที่</label><select id="project">${projects.map(c=>`<option ${((x?.project||'ส่วนตัว/ทั่วไป')===c)?'selected':''}>${esc(c)}</option>`).join('')}</select><small class="field-hint">ใช้แยกงบของบ้าน ฟาร์ม และกิจการ โดยหมวดด้านบนยังบอกว่าเงินถูกใช้กับอะไร</small></div><div class="field"><label>วันที่</label><input id="date" type="date" value="${x?.date||today()}"></div><div class="field"><label>หมายเหตุ</label><input id="note" placeholder="ไม่บังคับ" value="${esc(x?.note||'')}"></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteTx">ลบรายการนี้</button>`:''}</form></div></div>`
 }
 function assetSheet(){
   const editing=modal==='editAsset'; const a=editing?data.assets.find(x=>x.id===editId):null;
@@ -189,6 +206,10 @@ function goalSheet(){
 function budgetSheet(){
   const cat=editId; const current=Number(currentBudgetMap()[cat]||0);
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${esc(cat)}</h3><form id="budgetForm"><div class="field"><label>งบประมาณเดือนนี้</label><input id="budgetAmount" class="amount-input" type="number" min="0" value="${current||''}" placeholder="0" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearBudget">ล้างงบหมวดนี้</button>`:''}</form></div></div>`
+}
+function projectBudgetSheet(){
+  const name=editId,current=Number(currentProjectBudgetMap()[name]||0);
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${projectIcon(name)} ${esc(name)}</h3><form id="projectBudgetForm"><div class="field"><label>งบรายจ่ายเดือนนี้</label><input id="projectBudgetAmount" class="amount-input" type="number" min="0" value="${current||''}" placeholder="0" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearProjectBudget">ล้างงบโครงการนี้</button>`:''}</form></div></div>`
 }
 function pinSheet(){
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${data.pin?'เปลี่ยน PIN':'ตั้ง PIN'}</h3><form id="pinForm"><div class="field"><label>PIN ใหม่ 4–6 หลัก</label><input id="newPin1" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><div class="field"><label>ยืนยัน PIN</label><input id="newPin2" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><button class="primary">บันทึก PIN</button></form></div></div>`
@@ -218,12 +239,13 @@ function bind(){
   $('#addGoal')?.addEventListener('click',()=>{modal='goal';editId=null;render()});
   $$('[data-goal-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.goalId;modal='editGoal';render()}));
   $$('[data-budget-cat]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.budgetCat;modal='budget';render()}));
+  $$('[data-project-budget]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.projectBudget;modal='projectBudget';render()}));
   $('#sheetBack')?.addEventListener('click',e=>{if(e.target.id==='sheetBack'){modal=null;editId=null;render()}});
   $$('[data-txtype]').forEach(b=>b.addEventListener('click',()=>{$$('[data-txtype]').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');$('#txType').value=b.dataset.txtype;updateCategoryOptions(b.dataset.txtype)}));
 
   $('#txForm')?.addEventListener('submit',e=>{
     e.preventDefault();
-    const row={id:editId||uid(),type:$('#txType').value,amount:Number($('#amount').value),category:$('#category').value,account:$('#account').value.trim(),date:$('#date').value,note:$('#note').value.trim()};
+    const row={id:editId||uid(),type:$('#txType').value,amount:Number($('#amount').value),category:$('#category').value,account:$('#account').value.trim(),project:$('#project')?.value||'ส่วนตัว/ทั่วไป',date:$('#date').value,note:$('#note').value.trim()};
     if(!row.amount||row.amount<0)return alert('กรุณาใส่จำนวนเงินมากกว่า 0');
     if(modal==='editTx'){const i=data.transactions.findIndex(x=>x.id===editId);if(i>=0)data.transactions[i]=row}else data.transactions.push(row);
     save(); modal=null; editId=null; render();
@@ -247,6 +269,8 @@ function bind(){
 
   $('#budgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.budgets[key])data.budgets[key]={};data.budgets[key][editId]=Number($('#budgetAmount').value)||0;save();modal=null;editId=null;render()});
   $('#clearBudget')?.addEventListener('click',()=>{const key=monthKey();if(data.budgets[key])delete data.budgets[key][editId];save();modal=null;editId=null;render()});
+  $('#projectBudgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.projectBudgets[key])data.projectBudgets[key]={};data.projectBudgets[key][editId]=Number($('#projectBudgetAmount').value)||0;save();modal=null;editId=null;render()});
+  $('#clearProjectBudget')?.addEventListener('click',()=>{const key=monthKey();if(data.projectBudgets[key])delete data.projectBudgets[key][editId];save();modal=null;editId=null;render()});
 
   $('#setPin')?.addEventListener('click',()=>{modal='pin';render()});
   $('#changePin')?.addEventListener('click',()=>{modal='pin';render()});
