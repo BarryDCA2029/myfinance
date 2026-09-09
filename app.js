@@ -1,5 +1,6 @@
 const DB_KEY='myfinance_v1';
-const APP_VERSION='1.2.1';
+const VAULT_KEY='myfinance_secure_v122';
+const APP_VERSION='1.2.2';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','บ้าน กทม.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','Polar Farm'];
 const incomeCats=['เงินเดือน','รายได้พิเศษ','ปันผล','ดอกเบี้ย','ค่าเช่า','ขายทรัพย์สิน','อื่น ๆ'];
@@ -19,9 +20,12 @@ const defaultData={
 };
 
 let data=load();
+let currentPin=null;
+let hasSecureVault=!!localStorage.getItem(VAULT_KEY);
+let legacyPin=data.pin||null;
 let page='dashboard';
 let txFilter='all';
-let unlocked=!data.pin;
+let unlocked=!hasSecureVault&&!legacyPin;
 let modal=null;
 let editId=null;
 
@@ -61,10 +65,40 @@ function load(){
   try{return migrate(JSON.parse(localStorage.getItem(DB_KEY)||'{}'))}
   catch{return clone(defaultData)}
 }
+const te=new TextEncoder(), td=new TextDecoder();
+const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function deriveKey(secret,salt,usage=['encrypt','decrypt']){
+  const base=await crypto.subtle.importKey('raw',te.encode(secret),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:210000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,usage);
+}
+async function encryptObject(obj,secret){
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(secret,salt);
+  const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,te.encode(JSON.stringify(obj)));
+  return {format:'MYFINANCE-ENC-1',kdf:'PBKDF2-SHA256',iterations:210000,cipher:'AES-256-GCM',salt:b64(salt),iv:b64(iv),ciphertext:b64(ct)};
+}
+async function decryptObject(box,secret){
+  const salt=unb64(box.salt),iv=unb64(box.iv),ct=unb64(box.ciphertext);
+  const key=await deriveKey(secret,salt);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,ct);
+  return JSON.parse(td.decode(pt));
+}
+let saveSeq=Promise.resolve();
 function save(){
-  data.version=APP_VERSION;
-  data.lastActive=Date.now();
-  localStorage.setItem(DB_KEY,JSON.stringify(data));
+  data.version=APP_VERSION; data.lastActive=Date.now();
+  if(currentPin){
+    const snap=clone(data); delete snap.pin;
+    saveSeq=saveSeq.then(async()=>{const box=await encryptObject(snap,currentPin);localStorage.setItem(VAULT_KEY,JSON.stringify(box));localStorage.removeItem(DB_KEY);hasSecureVault=true}).catch(()=>{});
+  }else if(!hasSecureVault){ localStorage.setItem(DB_KEY,JSON.stringify(data)); }
+}
+async function unlockSecure(pin){
+  const box=JSON.parse(localStorage.getItem(VAULT_KEY));
+  data=migrate(await decryptObject(box,pin)); data.pin=null; currentPin=pin; unlocked=true; return true;
+}
+async function secureLegacy(pin){
+  if(pin!==legacyPin)throw new Error('bad pin');
+  currentPin=pin; data.pin=null; legacyPin=null; unlocked=true; save(); await saveSeq; localStorage.removeItem(DB_KEY);
 }
 function uid(){return Math.random().toString(36).slice(2)+Date.now().toString(36)}
 function today(){return new Date().toISOString().slice(0,10)}
@@ -103,7 +137,7 @@ function snapshotCurrentMonth(){
 
 function render(){document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
 function lockView(){
-  const first=!data.pin;
+  const first=!(hasSecureVault||legacyPin||currentPin);
   return `<div class="lock"><div class="lock-card"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p>Private Financial Planner<br>ข้อมูลอยู่ในเครื่องนี้ผ่านพื้นที่จัดเก็บของ Safari/PWA</p>${first?`<div class="notice">ยังไม่ได้ตั้ง PIN หากต้องการล็อกแอป ให้เข้า ⚙️ Settings หลังเปิดแอป แล้วเลือก “ตั้ง PIN”</div><button class="primary" id="enterWithoutPin">เข้าแอป</button>`:`<div class="field"><label>PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus></div><button class="primary" id="unlockBtn">ปลดล็อก</button>`}<div class="notice">Local-only: ไม่มีระบบ Sync/iCloud ในแอปนี้ ควร Export Backup เป็นระยะ</div></div></div>`
 }
 function appView(){return `<main class="shell">${page==='dashboard'?dashboard():page==='transactions'?transactions():page==='assets'?assets():page==='plan'?plan():settings()}</main>${bottomNav()}${modal?sheet():''}`}
@@ -186,8 +220,8 @@ function projectPlan(){
   return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>งบแยกพื้นที่/กิจการ</span></div><div class="card budget-list">${rows}</div></section>`
 }
 function settings(){
-  const hasPin=!!data.pin;
-  return `${header('Settings','Privacy, Backup & App Lock')}<h2 class="page-title">ความเป็นส่วนตัวและข้อมูล</h2><div class="settings-list"><div class="setting"><div><b>App Lock</b><small>${hasPin?'มี PIN แล้ว':'ยังไม่ได้ตั้ง PIN'}</small></div><button id="${hasPin?'changePin':'setPin'}">${hasPin?'Change':'Set PIN'}</button></div><div class="setting"><div><b>Auto Lock</b><small>${hasPin?'ล็อกเมื่อออกจากแอปเกินเวลาที่กำหนด':'เปิดใช้ได้หลังตั้ง PIN'}</small></div><input class="toggle" id="autoLock" type="checkbox" ${data.autoLock?'checked':''} ${hasPin?'':'disabled'}></div><div class="setting"><div><b>เวลาล็อกอัตโนมัติ</b><small>หลังออกจากแอป</small></div><select id="lockMinutes" ${hasPin?'':'disabled'}><option value="1" ${data.autoLockMinutes==1?'selected':''}>1 นาที</option><option value="5" ${data.autoLockMinutes==5?'selected':''}>5 นาที</option><option value="15" ${data.autoLockMinutes==15?'selected':''}>15 นาที</option></select></div><div class="setting"><div><b>Backup ข้อมูล</b><small>ดาวน์โหลดไฟล์ JSON เก็บไว้เอง</small></div><button id="exportBtn">Export</button></div><div class="setting"><div><b>Restore ข้อมูล</b><small>นำไฟล์ Backup กลับเข้าแอป</small></div><button id="importBtn">Import</button></div><div class="setting"><div><b>บันทึก Snapshot เดือนนี้</b><small>เก็บ Net Worth เพื่อเทียบเดือนถัดไป</small></div><button id="snapshotBtn">Save</button></div>${hasPin?`<div class="setting"><div><b>ล็อกทันที</b><small>กลับไปหน้า PIN</small></div><button id="lockNow">Lock</button></div>`:''}</div><div class="notice"><b>Local-only</b><br>ข้อมูลไม่ถูก Sync โดยแอปนี้ แต่การล้างข้อมูลเว็บไซต์/Safari หรือลบข้อมูลของ PWA อาจทำให้ข้อมูลหาย ควร Export Backup เป็นระยะ</div><div class="version">MY FINANCE v${APP_VERSION}</div>`
+  const hasPin=!!(hasSecureVault||legacyPin||currentPin);
+  return `${header('Settings','Privacy, Backup & App Lock')}<h2 class="page-title">ความเป็นส่วนตัวและข้อมูล</h2><div class="settings-list"><div class="setting"><div><b>App Lock</b><small>${hasPin?'เข้ารหัสข้อมูลแล้ว':'ยังไม่ได้ตั้ง PIN / Encryption'}</small></div><button id="${hasPin?'changePin':'setPin'}">${hasPin?'Change':'Set PIN'}</button></div><div class="setting"><div><b>Auto Lock</b><small>${hasPin?'ล็อกเมื่อออกจากแอปเกินเวลาที่กำหนด':'เปิดใช้ได้หลังตั้ง PIN'}</small></div><input class="toggle" id="autoLock" type="checkbox" ${data.autoLock?'checked':''} ${hasPin?'':'disabled'}></div><div class="setting"><div><b>เวลาล็อกอัตโนมัติ</b><small>หลังออกจากแอป</small></div><select id="lockMinutes" ${hasPin?'':'disabled'}><option value="1" ${data.autoLockMinutes==1?'selected':''}>1 นาที</option><option value="5" ${data.autoLockMinutes==5?'selected':''}>5 นาที</option><option value="15" ${data.autoLockMinutes==15?'selected':''}>15 นาที</option></select></div><div class="setting"><div><b>Encrypted Backup</b><small>ไฟล์สำรองเข้ารหัส AES-256-GCM และต้องใช้รหัสผ่านเพื่อเปิด</small></div><button id="exportBtn">Export</button></div><div class="setting"><div><b>Restore Encrypted Backup</b><small>นำไฟล์สำรองที่เข้ารหัสกลับเข้าแอป</small></div><button id="importBtn">Import</button></div><div class="setting"><div><b>บันทึก Snapshot เดือนนี้</b><small>เก็บ Net Worth เพื่อเทียบเดือนถัดไป</small></div><button id="snapshotBtn">Save</button></div>${hasPin?`<div class="setting"><div><b>ล็อกทันที</b><small>กลับไปหน้า PIN</small></div><button id="lockNow">Lock</button></div>`:''}</div><div class="notice"><b>Security v1.2.2</b><br>เมื่อเปิด App Lock ข้อมูลหลักในเครื่องถูกเข้ารหัสด้วย AES-256-GCM โดยคีย์ที่ derive จาก PIN ด้วย PBKDF2-SHA-256 (210,000 iterations) แอปนี้ไม่มี Cloud Sync/Analytics/API ส่งข้อมูลการเงินออกไป ควรเก็บ Encrypted Backup ไว้ในเครื่องอย่างปลอดภัย</div><div class="version">MY FINANCE v${APP_VERSION}</div>`
 }
 function bottomNav(){
   const items=[['dashboard','⌂','Dashboard'],['transactions','☷','Transactions'],['add','+',''],['assets','◇','Assets'],['plan','◎','Plan']];
@@ -226,7 +260,7 @@ function projectBudgetSheet(){
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${projectIcon(name)} ${esc(name)}</h3><form id="projectBudgetForm"><div class="field"><label>งบรายจ่ายเดือนนี้</label><input id="projectBudgetAmount" class="amount-input" type="text" inputmode="decimal" autocomplete="off" value="${current||''}" placeholder="0.00" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearProjectBudget">ล้างงบโครงการนี้</button>`:''}</form></div></div>`
 }
 function pinSheet(){
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${data.pin?'เปลี่ยน PIN':'ตั้ง PIN'}</h3><form id="pinForm"><div class="field"><label>PIN ใหม่ 4–6 หลัก</label><input id="newPin1" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><div class="field"><label>ยืนยัน PIN</label><input id="newPin2" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><button class="primary">บันทึก PIN</button></form></div></div>`
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${(hasSecureVault||legacyPin||currentPin)?'เปลี่ยน PIN / Encryption':'ตั้ง PIN / Encryption'}</h3><form id="pinForm"><div class="field"><label>PIN ใหม่ 4–6 หลัก</label><input id="newPin1" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><div class="field"><label>ยืนยัน PIN</label><input id="newPin2" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><button class="primary">บันทึก PIN</button></form></div></div>`
 }
 function updateCategoryOptions(type,selected=''){
   const c=$('#category'); if(!c)return;
@@ -237,7 +271,7 @@ function updateCategoryOptions(type,selected=''){
 function bind(){
   if(!unlocked){
     $('#enterWithoutPin')?.addEventListener('click',()=>{unlocked=true;render()});
-    const unlock=()=>{if($('#unlockPin')?.value===data.pin){unlocked=true;data.lastActive=Date.now();render()}else alert('PIN ไม่ถูกต้อง')};
+    const unlock=async()=>{const pin=$('#unlockPin')?.value||'';try{if(hasSecureVault)await unlockSecure(pin);else await secureLegacy(pin);data.lastActive=Date.now();render()}catch{alert('PIN ไม่ถูกต้อง หรือข้อมูลเข้ารหัสไม่สามารถเปิดได้')}};
     $('#unlockBtn')?.addEventListener('click',unlock); $('#unlockPin')?.addEventListener('keydown',e=>e.key==='Enter'&&unlock());
     return;
   }
@@ -289,28 +323,29 @@ function bind(){
 
   $('#setPin')?.addEventListener('click',()=>{modal='pin';render()});
   $('#changePin')?.addEventListener('click',()=>{modal='pin';render()});
-  $('#pinForm')?.addEventListener('submit',e=>{e.preventDefault();const a=$('#newPin1').value,b=$('#newPin2').value;if(!/^\d{4,6}$/.test(a))return alert('PIN ต้องเป็นตัวเลข 4–6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');data.pin=a;data.autoLock=true;save();modal=null;render()});
+  $('#pinForm')?.addEventListener('submit',async e=>{e.preventDefault();const a=$('#newPin1').value,b=$('#newPin2').value;if(!/^\d{6}$/.test(a))return alert('เพื่อความปลอดภัย V1.2.2 กำหนด PIN 6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');currentPin=a;legacyPin=null;data.pin=null;data.autoLock=true;save();await saveSeq;localStorage.removeItem(DB_KEY);modal=null;render();alert('เปิดการเข้ารหัสข้อมูลในเครื่องแล้ว')});
   $('#autoLock')?.addEventListener('change',e=>{data.autoLock=e.target.checked;save()});
   $('#lockMinutes')?.addEventListener('change',e=>{data.autoLockMinutes=Number(e.target.value)||1;save()});
-  $('#lockNow')?.addEventListener('click',()=>{data.lastActive=Date.now();save();unlocked=false;render()});
+  $('#lockNow')?.addEventListener('click',async()=>{data.lastActive=Date.now();save();await saveSeq;currentPin=null;unlocked=false;render()});
   $('#snapshotBtn')?.addEventListener('click',()=>{snapshotCurrentMonth();save();alert('บันทึก Snapshot เดือนนี้แล้ว');render()});
-  $('#exportBtn')?.addEventListener('click',()=>{snapshotCurrentMonth();save();const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});
+  $('#exportBtn')?.addEventListener('click',async()=>{const pass=prompt('ตั้งรหัสผ่านสำหรับไฟล์ Backup (อย่างน้อย 8 ตัวอักษร)');if(!pass)return;if(pass.length<8)return alert('รหัสผ่าน Backup ต้องอย่างน้อย 8 ตัวอักษร');snapshotCurrentMonth();save();await saveSeq;const snap=clone(data);delete snap.pin;const box=await encryptObject(snap,pass);const blob=new Blob([JSON.stringify(box,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-ENCRYPTED-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});
   $('#importBtn')?.addEventListener('click',()=>document.getElementById('importFile').click());
 }
 
 document.getElementById('importFile').addEventListener('change',async e=>{
   const f=e.target.files[0]; if(!f)return;
   try{
-    const obj=JSON.parse(await f.text());
+    let obj=JSON.parse(await f.text());
+    if(obj?.format==='MYFINANCE-ENC-1'){const pass=prompt('รหัสผ่านของไฟล์ Backup');if(!pass)throw new Error('cancel');obj=await decryptObject(obj,pass)}
     if(!obj||!Array.isArray(obj.transactions)||!Array.isArray(obj.assets))throw new Error('invalid');
-    if(confirm('Restore จะทับข้อมูลปัจจุบันทั้งหมด ต้องการดำเนินการหรือไม่?')){data=migrate(obj);save();unlocked=!data.pin;page='dashboard';render()}
-  }catch{alert('ไฟล์ Backup ไม่ถูกต้อง')}
+    if(confirm('Restore จะทับข้อมูลปัจจุบันทั้งหมด ต้องการดำเนินการหรือไม่?')){data=migrate(obj);data.pin=null;save();await saveSeq;page='dashboard';render()}
+  }catch{alert('ไฟล์ Backup หรือรหัสผ่านไม่ถูกต้อง')}
   e.target.value='';
 });
 
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden){data.lastActive=Date.now();save()}
-  else if(data.autoLock&&data.pin){const ms=(Number(data.autoLockMinutes)||1)*60000;if(Date.now()-Number(data.lastActive||0)>ms){unlocked=false;render()}}
+  else if(data.autoLock&&(hasSecureVault||legacyPin||currentPin)){const ms=(Number(data.autoLockMinutes)||1)*60000;if(Date.now()-Number(data.lastActive||0)>ms){currentPin=null;unlocked=false;render()}}
 });
 
 window.addEventListener('beforeunload',()=>{data.lastActive=Date.now();save()});
