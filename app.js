@@ -1,5 +1,5 @@
 const DB_KEY='myfinance_v1';
-const APP_VERSION='1.2.0';
+const APP_VERSION='1.2.1';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','บ้าน กทม.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','Polar Farm'];
 const incomeCats=['เงินเดือน','รายได้พิเศษ','ปันผล','ดอกเบี้ย','ค่าเช่า','ขายทรัพย์สิน','อื่น ๆ'];
@@ -25,8 +25,22 @@ let unlocked=!data.pin;
 let modal=null;
 let editId=null;
 
-const THB=n=>new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',maximumFractionDigits:0}).format(Number(n||0));
-const num=n=>new Intl.NumberFormat('th-TH',{maximumFractionDigits:0}).format(Number(n||0));
+const THB=n=>new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',minimumFractionDigits:0,maximumFractionDigits:2}).format(Number(n||0));
+const num=n=>new Intl.NumberFormat('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2}).format(Number(n||0));
+function parseMoney(v){
+  let s=String(v??'').trim().replace(/\s/g,'');
+  if(!s)return 0;
+  // รองรับทั้ง 1046.93 และ 1046,93 รวมถึง comma คั่นหลักพัน
+  if(s.includes('.') && s.includes(',')) s=s.replace(/,/g,'');
+  else if(s.includes(',') && !s.includes('.')){
+    const parts=s.split(',');
+    if(parts.length===2 && parts[1].length<=2) s=parts[0]+'.'+parts[1];
+    else s=s.replace(/,/g,'');
+  }
+  s=s.replace(/[^0-9.-]/g,'');
+  const n=Number(s);
+  return Number.isFinite(n)?Math.round((n+Number.EPSILON)*100)/100:NaN;
+}
 const $=(s)=>document.querySelector(s);
 const $$=(s)=>[...document.querySelectorAll(s)];
 
@@ -193,23 +207,23 @@ function txSheet(){
   const x=editing?data.transactions.find(t=>t.id===editId):null;
   const type=x?.type||'expense';
   const cats=type==='income'?incomeCats:expenseCats;
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขรายการ':'เพิ่มรายการ'}</h3><div class="type-grid">${[['income','💚','รายรับ'],['expense','🩷','รายจ่าย'],['transfer','🔄','โอนเงิน'],['investment','📈','ลงทุน']].map(([t,i,n])=>`<button class="type ${type===t?'sel':''}" data-txtype="${t}"><strong>${i}</strong>${n}</button>`).join('')}</div><form id="txForm"><input type="hidden" id="txType" value="${type}"><div class="field"><label>จำนวนเงิน</label><input id="amount" class="amount-input" inputmode="decimal" type="number" min="0" step="0.01" placeholder="0" value="${x?Number(x.amount||0):''}" required></div><div class="row2"><div class="field"><label>หมวด</label><select id="category">${cats.map(c=>`<option ${x?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>บัญชี</label><input id="account" placeholder="เช่น KBank / เงินสด" value="${esc(x?.account||'')}"></div></div><div class="field"><label>โครงการ / สถานที่</label><select id="project">${projects.map(c=>`<option ${((x?.project||'ส่วนตัว/ทั่วไป')===c)?'selected':''}>${esc(c)}</option>`).join('')}</select><small class="field-hint">ใช้แยกงบของบ้าน ฟาร์ม และกิจการ โดยหมวดด้านบนยังบอกว่าเงินถูกใช้กับอะไร</small></div><div class="field"><label>วันที่</label><input id="date" type="date" value="${x?.date||today()}"></div><div class="field"><label>หมายเหตุ</label><input id="note" placeholder="ไม่บังคับ" value="${esc(x?.note||'')}"></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteTx">ลบรายการนี้</button>`:''}</form></div></div>`
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขรายการ':'เพิ่มรายการ'}</h3><div class="type-grid">${[['income','💚','รายรับ'],['expense','🩷','รายจ่าย'],['transfer','🔄','โอนเงิน'],['investment','📈','ลงทุน']].map(([t,i,n])=>`<button class="type ${type===t?'sel':''}" data-txtype="${t}"><strong>${i}</strong>${n}</button>`).join('')}</div><form id="txForm"><input type="hidden" id="txType" value="${type}"><div class="field"><label>จำนวนเงิน</label><input id="amount" class="amount-input" inputmode="decimal" type="text" autocomplete="off" placeholder="0.00" value="${x?Number(x.amount||0):''}" required></div><div class="row2"><div class="field"><label>หมวด</label><select id="category">${cats.map(c=>`<option ${x?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>บัญชี</label><input id="account" placeholder="เช่น KBank / เงินสด" value="${esc(x?.account||'')}"></div></div><div class="field"><label>โครงการ / สถานที่</label><select id="project">${projects.map(c=>`<option ${((x?.project||'ส่วนตัว/ทั่วไป')===c)?'selected':''}>${esc(c)}</option>`).join('')}</select><small class="field-hint">ใช้แยกงบของบ้าน ฟาร์ม และกิจการ โดยหมวดด้านบนยังบอกว่าเงินถูกใช้กับอะไร</small></div><div class="field"><label>วันที่</label><input id="date" type="date" value="${x?.date||today()}"></div><div class="field"><label>หมายเหตุ</label><input id="note" placeholder="ไม่บังคับ" value="${esc(x?.note||'')}"></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteTx">ลบรายการนี้</button>`:''}</form></div></div>`
 }
 function assetSheet(){
   const editing=modal==='editAsset'; const a=editing?data.assets.find(x=>x.id===editId):null;
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขทรัพย์สิน':'เพิ่มทรัพย์สิน'}</h3><form id="assetForm"><div class="field"><label>ชื่อ</label><input id="assetName" required placeholder="เช่น บัญชี KBank" value="${esc(a?.name||'')}"></div><div class="field"><label>ประเภท</label><select id="assetKind">${[['cash','เงินสด/ธนาคาร'],['stock','หุ้น/กองทุน'],['gold','ทอง'],['property','ที่ดิน/อสังหาฯ'],['vehicle','รถ/ยานพาหนะ'],['other','ทรัพย์สินอื่น'],['debt','หนี้สิน']].map(([v,n])=>`<option value="${v}" ${a?.kind===v?'selected':''}>${n}</option>`).join('')}</select></div><div class="field"><label>มูลค่าปัจจุบัน</label><input id="assetValue" class="amount-input" type="number" inputmode="decimal" min="0" value="${a?Number(a.value||0):''}" required></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteAsset">ลบรายการนี้</button>`:''}</form></div></div>`
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขทรัพย์สิน':'เพิ่มทรัพย์สิน'}</h3><form id="assetForm"><div class="field"><label>ชื่อ</label><input id="assetName" required placeholder="เช่น บัญชี KBank" value="${esc(a?.name||'')}"></div><div class="field"><label>ประเภท</label><select id="assetKind">${[['cash','เงินสด/ธนาคาร'],['stock','หุ้น/กองทุน'],['gold','ทอง'],['property','ที่ดิน/อสังหาฯ'],['vehicle','รถ/ยานพาหนะ'],['other','ทรัพย์สินอื่น'],['debt','หนี้สิน']].map(([v,n])=>`<option value="${v}" ${a?.kind===v?'selected':''}>${n}</option>`).join('')}</select></div><div class="field"><label>มูลค่าปัจจุบัน</label><input id="assetValue" class="amount-input" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${a?Number(a.value||0):''}" required></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteAsset">ลบรายการนี้</button>`:''}</form></div></div>`
 }
 function goalSheet(){
   const editing=modal==='editGoal'; const g=editing?data.goals.find(x=>x.id===editId):null;
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขเป้าหมาย':'เพิ่มเป้าหมาย'}</h3><form id="goalForm"><div class="field"><label>ชื่อเป้าหมาย</label><input id="goalName" value="${esc(g?.name||'')}" placeholder="เช่น เงินเที่ยวต่างประเทศ" required></div><div class="field"><label>เป้าหมาย</label><input id="goalTarget" type="number" min="0" value="${g?Number(g.target||0):''}" required></div><div class="field"><label>ปัจจุบัน</label><input id="goalCurrent" type="number" min="0" value="${g?Number(g.current||0):0}" required></div><button class="primary">บันทึก</button>${editing?`<button type="button" class="danger" id="deleteGoal">ลบเป้าหมายนี้</button>`:''}</form></div></div>`
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไขเป้าหมาย':'เพิ่มเป้าหมาย'}</h3><form id="goalForm"><div class="field"><label>ชื่อเป้าหมาย</label><input id="goalName" value="${esc(g?.name||'')}" placeholder="เช่น เงินเที่ยวต่างประเทศ" required></div><div class="field"><label>เป้าหมาย</label><input id="goalTarget" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${g?Number(g.target||0):''}" required></div><div class="field"><label>ปัจจุบัน</label><input id="goalCurrent" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" value="${g?Number(g.current||0):0}" required></div><button class="primary">บันทึก</button>${editing?`<button type="button" class="danger" id="deleteGoal">ลบเป้าหมายนี้</button>`:''}</form></div></div>`
 }
 function budgetSheet(){
   const cat=editId; const current=Number(currentBudgetMap()[cat]||0);
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${esc(cat)}</h3><form id="budgetForm"><div class="field"><label>งบประมาณเดือนนี้</label><input id="budgetAmount" class="amount-input" type="number" min="0" value="${current||''}" placeholder="0" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearBudget">ล้างงบหมวดนี้</button>`:''}</form></div></div>`
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${esc(cat)}</h3><form id="budgetForm"><div class="field"><label>งบประมาณเดือนนี้</label><input id="budgetAmount" class="amount-input" type="text" inputmode="decimal" autocomplete="off" value="${current||''}" placeholder="0.00" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearBudget">ล้างงบหมวดนี้</button>`:''}</form></div></div>`
 }
 function projectBudgetSheet(){
   const name=editId,current=Number(currentProjectBudgetMap()[name]||0);
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${projectIcon(name)} ${esc(name)}</h3><form id="projectBudgetForm"><div class="field"><label>งบรายจ่ายเดือนนี้</label><input id="projectBudgetAmount" class="amount-input" type="number" min="0" value="${current||''}" placeholder="0" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearProjectBudget">ล้างงบโครงการนี้</button>`:''}</form></div></div>`
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งงบ: ${projectIcon(name)} ${esc(name)}</h3><form id="projectBudgetForm"><div class="field"><label>งบรายจ่ายเดือนนี้</label><input id="projectBudgetAmount" class="amount-input" type="text" inputmode="decimal" autocomplete="off" value="${current||''}" placeholder="0.00" required></div><button class="primary">บันทึกงบ</button>${current?`<button type="button" class="danger" id="clearProjectBudget">ล้างงบโครงการนี้</button>`:''}</form></div></div>`
 }
 function pinSheet(){
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${data.pin?'เปลี่ยน PIN':'ตั้ง PIN'}</h3><form id="pinForm"><div class="field"><label>PIN ใหม่ 4–6 หลัก</label><input id="newPin1" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><div class="field"><label>ยืนยัน PIN</label><input id="newPin2" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><button class="primary">บันทึก PIN</button></form></div></div>`
@@ -245,7 +259,7 @@ function bind(){
 
   $('#txForm')?.addEventListener('submit',e=>{
     e.preventDefault();
-    const row={id:editId||uid(),type:$('#txType').value,amount:Number($('#amount').value),category:$('#category').value,account:$('#account').value.trim(),project:$('#project')?.value||'ส่วนตัว/ทั่วไป',date:$('#date').value,note:$('#note').value.trim()};
+    const row={id:editId||uid(),type:$('#txType').value,amount:parseMoney($('#amount').value),category:$('#category').value,account:$('#account').value.trim(),project:$('#project')?.value||'ส่วนตัว/ทั่วไป',date:$('#date').value,note:$('#note').value.trim()};
     if(!row.amount||row.amount<0)return alert('กรุณาใส่จำนวนเงินมากกว่า 0');
     if(modal==='editTx'){const i=data.transactions.findIndex(x=>x.id===editId);if(i>=0)data.transactions[i]=row}else data.transactions.push(row);
     save(); modal=null; editId=null; render();
@@ -253,23 +267,24 @@ function bind(){
   $('#deleteTx')?.addEventListener('click',()=>{if(confirm('ลบรายการนี้ใช่หรือไม่?')){data.transactions=data.transactions.filter(x=>x.id!==editId);save();modal=null;editId=null;render()}});
 
   $('#assetForm')?.addEventListener('submit',e=>{
-    e.preventDefault(); const row={id:editId||uid(),name:$('#assetName').value.trim(),kind:$('#assetKind').value,value:Number($('#assetValue').value)};
-    if(!row.name)return alert('กรุณาใส่ชื่อทรัพย์สิน');
+    e.preventDefault(); const row={id:editId||uid(),name:$('#assetName').value.trim(),kind:$('#assetKind').value,value:parseMoney($('#assetValue').value)};
+    if(!row.name)return alert('กรุณาใส่ชื่อทรัพย์สิน'); if(!Number.isFinite(row.value)||row.value<0)return alert('กรุณาใส่มูลค่าที่ถูกต้อง');
     if(modal==='editAsset'){const i=data.assets.findIndex(x=>x.id===editId);if(i>=0)data.assets[i]=row}else data.assets.push(row);
     snapshotCurrentMonth(); save(); modal=null; editId=null; render();
   });
   $('#deleteAsset')?.addEventListener('click',()=>{if(confirm('ลบทรัพย์สินนี้ใช่หรือไม่?')){data.assets=data.assets.filter(x=>x.id!==editId);snapshotCurrentMonth();save();modal=null;editId=null;render()}});
 
   $('#goalForm')?.addEventListener('submit',e=>{
-    e.preventDefault(); const row={id:editId||uid(),name:$('#goalName').value.trim(),target:Number($('#goalTarget').value)||0,current:Number($('#goalCurrent').value)||0};
+    e.preventDefault(); const row={id:editId||uid(),name:$('#goalName').value.trim(),target:parseMoney($('#goalTarget').value)||0,current:parseMoney($('#goalCurrent').value)||0};
+    if(!Number.isFinite(row.target)||!Number.isFinite(row.current)||row.target<0||row.current<0)return alert('กรุณาใส่จำนวนเงินที่ถูกต้อง');
     if(modal==='editGoal'){const i=data.goals.findIndex(x=>x.id===editId);if(i>=0)data.goals[i]=row}else data.goals.push(row);
     save(); modal=null; editId=null; render();
   });
   $('#deleteGoal')?.addEventListener('click',()=>{if(data.goals.length<=1)return alert('ต้องมีอย่างน้อย 1 เป้าหมาย');if(confirm('ลบเป้าหมายนี้ใช่หรือไม่?')){data.goals=data.goals.filter(x=>x.id!==editId);save();modal=null;editId=null;render()}});
 
-  $('#budgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.budgets[key])data.budgets[key]={};data.budgets[key][editId]=Number($('#budgetAmount').value)||0;save();modal=null;editId=null;render()});
+  $('#budgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.budgets[key])data.budgets[key]={};data.budgets[key][editId]=parseMoney($('#budgetAmount').value)||0;save();modal=null;editId=null;render()});
   $('#clearBudget')?.addEventListener('click',()=>{const key=monthKey();if(data.budgets[key])delete data.budgets[key][editId];save();modal=null;editId=null;render()});
-  $('#projectBudgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.projectBudgets[key])data.projectBudgets[key]={};data.projectBudgets[key][editId]=Number($('#projectBudgetAmount').value)||0;save();modal=null;editId=null;render()});
+  $('#projectBudgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.projectBudgets[key])data.projectBudgets[key]={};data.projectBudgets[key][editId]=parseMoney($('#projectBudgetAmount').value)||0;save();modal=null;editId=null;render()});
   $('#clearProjectBudget')?.addEventListener('click',()=>{const key=monthKey();if(data.projectBudgets[key])delete data.projectBudgets[key][editId];save();modal=null;editId=null;render()});
 
   $('#setPin')?.addEventListener('click',()=>{modal='pin';render()});
