@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.7';
+const APP_VERSION='1.7.1';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','บ้าน กทม.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 1','ค่าเช่า 2','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -362,8 +362,8 @@ function projectLifetime(name){
 }
 function projectPlan(){
   const pb=currentProjectBudgetMap();
-  const rows=projects.filter(x=>x!=='ส่วนตัว/ทั่วไป').map(name=>{const st=projectStats(name),life=projectLifetime(name),b=Number(pb[name]||0),p=b?Math.round(st.expense/b*100):0;return `<div class="budget-row"><div class="budget-head"><div><b>${projectIcon(name)} ${esc(name)}</b><small>ลงทุนสะสม ${THB(life.invested)} · เงินรับกลับ ${THB(life.returned)} · คืนทุน ${life.pct.toFixed(1)}% · ยังไม่คืน ${THB(life.remaining)}</small><small>เดือนนี้: รับ ${THB(st.income)} · จ่าย ${THB(st.expense)}${st.inKind?` · ใช้เอง ${THB(st.inKind)}`:''}</small></div><button class="budget-edit" data-project-budget="${esc(name)}">${b?THB(b):'ตั้งวงเงิน'}</button></div>${b?`<div class="bar budget ${p>100?'over':p>=80?'warn':''}"><i style="width:${Math.min(100,p)}%"></i></div><small class="budget-note">${p>100?`ใช้แล้ว ${THB(st.expense)} (${p}%) · เกินวงเงิน ${THB(st.expense-b)}`:`ใช้แล้ว ${THB(st.expense)} (${p}%) · เหลือ ${THB(b-st.expense)} (${Math.max(0,100-p)}%)`}</small>`:''}</div>`}).join('');
-  return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>ติดตามการคืนทุน</span></div><div class="card budget-list">${rows}</div></section>`
+  const rows=projects.filter(x=>x!=='ส่วนตัว/ทั่วไป').map(name=>{const st=projectStats(name),life=projectLifetime(name),b=Number(pb[name]||0),p=b?Math.round(st.expense/b*100):0;return `<div class="budget-row"><div class="budget-head"><button class="project-edit-head" data-project-detail="${esc(name)}"><b>${projectIcon(name)} ${esc(name)} <span>›</span></b><small>ลงทุนสะสม ${THB(life.invested)} · เงินรับกลับ ${THB(life.returned)} · คืนทุน ${life.pct.toFixed(1)}% · ยังไม่คืน ${THB(life.remaining)}</small><small>เดือนนี้: รับ ${THB(st.income)} · จ่าย ${THB(st.expense)}${st.inKind?` · ใช้เอง ${THB(st.inKind)}`:''}</small></button><button class="budget-edit" data-project-budget="${esc(name)}">${b?THB(b):'ตั้งวงเงิน'}</button></div>${b?`<div class="bar budget ${p>100?'over':p>=80?'warn':''}"><i style="width:${Math.min(100,p)}%"></i></div><small class="budget-note">${p>100?`ใช้แล้ว ${THB(st.expense)} (${p}%) · เกินวงเงิน ${THB(st.expense-b)}`:`ใช้แล้ว ${THB(st.expense)} (${p}%) · เหลือ ${THB(b-st.expense)} (${Math.max(0,100-p)}%)`}</small>`:''}</div>`}).join('');
+  return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>แตะชื่อเพื่อแก้ยอดตั้งต้น</span></div><div class="card budget-list">${rows}</div></section>`
 }
 
 function settings(){
@@ -380,6 +380,7 @@ function sheet(){
   if(modal==='goal'||modal==='editGoal')return goalSheet();
   if(modal==='budget')return budgetSheet();
   if(modal==='projectBudget')return projectBudgetSheet();
+  if(modal==='projectDetail')return projectDetailSheet();
   if(modal==='pin')return pinSheet();
   if(modal==='reconcile')return reconcileSheet();
   if(modal==='calendarDay')return calendarDaySheet();
@@ -427,6 +428,16 @@ function projectBudgetSheet(){
   const name=editId,current=Number(currentProjectBudgetMap()[name]||0);
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>ตั้งวงเงิน: ${projectIcon(name)} ${esc(name)}</h3><form id="projectBudgetForm"><div class="field"><label>วงเงินรายจ่ายเดือนนี้</label><input id="projectBudgetAmount" class="amount-input money-input" type="text" inputmode="decimal" autocomplete="off" value="${current?num(current):''}" placeholder="0.00" required></div><button class="primary">บันทึกวงเงิน</button>${current?`<button type="button" class="danger" id="clearProjectBudget">ล้างวงเงินโครงการนี้</button>`:''}</form></div></div>`
 }
+function projectDetailSheet(){
+  const name=editId||'';
+  const opening=data.settings?.projectOpening?.[name]||{};
+  const life=projectLifetime(name);
+  const tx=data.transactions.filter(x=>(x.project||'ส่วนตัว/ทั่วไป')===name);
+  const actualIncome=tx.filter(x=>x.type==='income').reduce((sum,x)=>sum+Number(x.amount||0),0);
+  const actualExpense=round2(tx.filter(x=>x.type==='expense').reduce((sum,x)=>sum+Number(x.amount||0),0)-tx.filter(x=>x.type==='reimbursement').reduce((sum,x)=>sum+Number(x.amount||0),0));
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${projectIcon(name)} ${esc(name)}</h3><div class="project-kpis"><div><small>ลงทุนสะสม</small><b>${THB(life.invested)}</b></div><div><small>เงินรับกลับ</small><b>${THB(life.returned)}</b></div><div><small>คืนทุน</small><b>${life.pct.toFixed(1)}%</b></div><div><small>ยังไม่คืน</small><b>${THB(life.remaining)}</b></div></div><div class="notice project-note"><b>ยอดตั้งต้นไม่กระทบ Dashboard</b><br>ใช้สำหรับเงินลงทุน/เงินรับกลับที่เกิดขึ้นก่อนเริ่มบันทึกใน MY FINANCE ส่วนรายการใหม่ของ Project จะถูกรวมให้อัตโนมัติ</div><form id="projectDetailForm"><div class="field"><label>เงินลงทุนตั้งต้น</label><input id="projectOpeningInvested" class="amount-input money-input" type="text" inputmode="decimal" autocomplete="off" value="${Number(opening.invested||0)?num(opening.invested):''}" placeholder="0.00"></div><div class="field"><label>เงินรับกลับตั้งต้น</label><input id="projectOpeningReturned" class="amount-input money-input" type="text" inputmode="decimal" autocomplete="off" value="${Number(opening.returned||0)?num(opening.returned):''}" placeholder="0.00"></div><div class="field"><label>รายละเอียด / ที่มาของยอดตั้งต้น</label><textarea id="projectOpeningNote" rows="3" placeholder="เช่น รั้ว 30,000 + ค่าปลูก 10,000">${esc(opening.note||'')}</textarea></div><div class="project-auto"><small>รายการที่บันทึกในแอปแล้ว</small><div>รายรับ Project ${THB(actualIncome)} · รายจ่ายสุทธิ ${THB(actualExpense)}</div></div><button class="primary">บันทึกข้อมูล Project</button>${(Number(opening.invested||0)||Number(opening.returned||0)||opening.note)?`<button type="button" class="danger" id="clearProjectOpening">ล้างยอดตั้งต้น</button>`:''}</form></div></div>`;
+}
+
 function reconcileSheet(){
   const a=findAsset(editId); if(!a)return '';
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>Reconcile · ${esc(a.name)}</h3><p class="field-hint">ใส่ยอดที่มีอยู่จริงตอนนี้ ระบบจะปรับ Asset โดยไม่สร้างรายรับ/รายจ่ายปลอม และเก็บบันทึกส่วนต่างไว้</p><form id="reconcileForm"><div class="field"><label>ยอดในแอป</label><input value="${num(a.value)}" disabled></div><div class="field"><label>ยอดจริงตอนนี้</label><input id="actualBalance" class="money-input" type="text" inputmode="decimal" required></div><div class="field"><label>หมายเหตุ</label><input id="reconcileNote" value="ตรวจยอดตามเงินจริง"></div><button class="primary">ปรับยอด</button></form></div></div>`
@@ -476,6 +487,7 @@ function bind(){
   $$('[data-goal-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.goalId;modal='editGoal';render()}));
   $$('[data-budget-cat]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.budgetCat;modal='budget';render()}));
   $$('[data-project-budget]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.projectBudget;modal='projectBudget';render()}));
+  $$('[data-project-detail]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.projectDetail;modal='projectDetail';render()}));
   $('#sheetBack')?.addEventListener('click',e=>{if(e.target.id==='sheetBack'){if(modal==='tx')txDraftDate='';modal=null;editId=null;render()}});
   $$('[data-txtype]').forEach(b=>b.addEventListener('click',()=>{if(modal==='editTx')return; txDraftType=b.dataset.txtype; render()}));
 
@@ -522,6 +534,8 @@ function bind(){
   $('#clearBudget')?.addEventListener('click',()=>{const key=monthKey();if(data.budgets[key])delete data.budgets[key][editId];save();modal=null;editId=null;render()});
   $('#projectBudgetForm')?.addEventListener('submit',e=>{e.preventDefault();const key=monthKey();if(!data.projectBudgets[key])data.projectBudgets[key]={};data.projectBudgets[key][editId]=parseMoney($('#projectBudgetAmount').value)||0;save();modal=null;editId=null;render()});
   $('#clearProjectBudget')?.addEventListener('click',()=>{const key=monthKey();if(data.projectBudgets[key])delete data.projectBudgets[key][editId];save();modal=null;editId=null;render()});
+  $('#projectDetailForm')?.addEventListener('submit',e=>{e.preventDefault();const invested=parseMoney($('#projectOpeningInvested').value),returned=parseMoney($('#projectOpeningReturned').value),note=$('#projectOpeningNote').value.trim();if(!Number.isFinite(invested)||!Number.isFinite(returned)||invested<0||returned<0)return alert('กรุณาใส่จำนวนเงินที่ถูกต้อง');data.settings.projectOpening=data.settings.projectOpening&&typeof data.settings.projectOpening==='object'?data.settings.projectOpening:{};data.settings.projectOpening[editId]={invested,returned,note};audit('แก้ไขยอดตั้งต้น Project',`${editId}: ลงทุน ${THB(invested)} · รับกลับ ${THB(returned)}`);save();modal=null;editId=null;render()});
+  $('#clearProjectOpening')?.addEventListener('click',()=>{if(confirm('ล้างเฉพาะยอดตั้งต้นของ Project นี้ใช่หรือไม่? รายการรายรับ/รายจ่ายที่บันทึกไว้จะไม่ถูกลบ')){if(data.settings?.projectOpening)delete data.settings.projectOpening[editId];audit('ล้างยอดตั้งต้น Project',editId);save();modal=null;editId=null;render()}});
 
   $('#setPin')?.addEventListener('click',()=>{modal='pin';render()});
   $('#changePin')?.addEventListener('click',()=>{modal='pin';render()});
