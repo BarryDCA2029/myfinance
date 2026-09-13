@@ -116,3 +116,10 @@ body{font-size:15px;color:var(--ui-ink);background:#f7f4ed}
 .asset-brand.gsb{background:linear-gradient(145deg,#ef82a2,#d74e7f);color:#fff}
 .asset-brand.bbl{background:linear-gradient(145deg,#1e7ff2,#0e56b7);color:#fff}
 .asset-brand.baac{background:linear-gradient(145deg,#3b8a61,#1e5f42);color:#fff}
+
+/* V1.8.4 unified visual asset identity */
+.bank-logo.asset-picture{width:40px!important;height:40px!important;border-radius:11px!important;object-fit:cover!important;background:#fff!important;box-shadow:0 2px 7px rgba(20,40,55,.10)}
+.kind-icon{width:25px;height:25px;border-radius:7px;object-fit:cover;vertical-align:middle;margin-right:5px;box-shadow:0 1px 4px rgba(20,40,55,.08)}
+.kind-icon-fallback{display:inline-grid;place-items:center;width:25px;height:25px;border-radius:7px;background:#eef1f2;color:#183b5b;font-size:11px;margin-right:5px}
+.asset-grid .a-label{display:flex;align-items:center;color:#183b5b;font-weight:750}
+.asset-grid .a-value{color:#102f4f!important}
