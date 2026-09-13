@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.8.5';
+const APP_VERSION='1.9';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -19,7 +19,8 @@ const defaultData={
   reconciliations:[],
   auditLog:[],
   verifiedEmptyDays:[],
-  settings:{currency:'THB',hideZeroDebt:true,defaultExpenseAssetId:'',emergencyAssetIds:[],projectOpening:{'ป่ายาง':{invested:40000,returned:11000,expense:0,cutoff:'2026-09-09',note:'รั้ว 30,000 + ปลูก/ดูแล 10,000 · เงินสนับสนุนปีแรก 6,400 + ปีสอง 4,600'}}}
+  reminders:[],
+  settings:{currency:'THB',hideZeroDebt:true,defaultExpenseAssetId:'',emergencyAssetIds:[],dashboardCards:['pulse','upcoming','calendar','spending','budget','projects','health','goals','recent'],projectOpening:{'ป่ายาง':{invested:40000,returned:11000,expense:0,cutoff:'2026-09-09',note:'รั้ว 30,000 + ปลูก/ดูแล 10,000 · เงินสนับสนุนปีแรก 6,400 + ปีสอง 4,600'}}}
 };
 
 let data=load();
@@ -39,8 +40,8 @@ let txDraftDate='';
 let detailType='';
 let detailMonth=monthKey();
 
-const THB=n=>new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',minimumFractionDigits:0,maximumFractionDigits:2}).format(Number(n||0));
-const num=n=>new Intl.NumberFormat('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2}).format(Number(n||0));
+const THB=n=>new Intl.NumberFormat('th-TH',{style:'currency',currency:'THB',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
+const num=n=>new Intl.NumberFormat('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0));
 function parseMoney(v){
   let s=String(v??'').trim().replace(/\s/g,'');
   if(!s)return 0;
@@ -70,9 +71,11 @@ function migrate(raw){
   merged.reconciliations=Array.isArray(raw.reconciliations)?raw.reconciliations:[];
   merged.auditLog=Array.isArray(raw.auditLog)?raw.auditLog:[];
   merged.verifiedEmptyDays=Array.isArray(raw.verifiedEmptyDays)?raw.verifiedEmptyDays:[];
+  merged.reminders=Array.isArray(raw.reminders)?raw.reminders:[];
   merged.assets=merged.assets.map(a=>({...a,note:String(a.note||'').slice(0,150)}));
   merged.settings={...defaultData.settings,...(raw.settings||{})};
   merged.settings.emergencyAssetIds=Array.isArray(merged.settings.emergencyAssetIds)?merged.settings.emergencyAssetIds:[];
+  merged.settings.dashboardCards=Array.isArray(merged.settings.dashboardCards)?merged.settings.dashboardCards:['pulse','upcoming','calendar','spending','budget','projects','health','goals','recent'];
   merged.settings.projectOpening=merged.settings.projectOpening&&typeof merged.settings.projectOpening==='object'?merged.settings.projectOpening:clone(defaultData.settings.projectOpening);
   Object.keys(merged.settings.projectOpening).forEach(k=>{const o=merged.settings.projectOpening[k]||{};merged.settings.projectOpening[k]={...o,expense:Number(o.expense||0),cutoff:o.cutoff||''};});
   // V1.7: rename only the legacy exact project label; keep Polar Farm 1/2 untouched.
@@ -202,7 +205,7 @@ function snapshotCurrentMonth(){
 function render(){ledgerBalanceCache=null;document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
 function lockView(){
   const first=!(hasSecureVault||legacyPin||currentPin);
-  return `<div class="lock"><div class="lock-card"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p>Private Financial Planner<br>ข้อมูลอยู่ในเครื่องนี้ผ่านพื้นที่จัดเก็บของ Safari/PWA</p>${first?`<div class="notice">ยังไม่ได้ตั้ง PIN หากต้องการล็อกแอป ให้เข้า ⚙️ Settings หลังเปิดแอป แล้วเลือก “ตั้ง PIN”</div><button class="primary" id="enterWithoutPin">เข้าแอป</button>`:`<div class="field"><label>PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus></div><button class="primary" id="unlockBtn">ปลดล็อก</button>`}<div class="notice">Local-only: ไม่มีระบบ Sync/iCloud ในแอปนี้ ควร Export Backup เป็นระยะ</div></div></div>`
+  return `<div class="lock"><div class="lock-card v19-lock"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p class="lock-tag">PRIVATE WEALTH</p>${first?`<div class="notice">ยังไม่ได้ตั้ง PIN · เข้าแอปแล้วตั้ง PIN 6 หลักใน Settings</div><button class="primary" id="enterWithoutPin">เข้าแอป</button>`:`<div class="field pin-field"><label>ENTER 6-DIGIT PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><button class="primary" id="unlockBtn">UNLOCK</button>`}<div class="privacy-line">Private • Local-first • Encrypted</div></div></div>`
 }
 function appView(){return `<main class="shell">${page==='dashboard'?dashboard():page==='transactions'?transactions():page==='assets'?assets():page==='plan'?plan():settings()}</main>${bottomNav()}${modal?sheet():''}`}
 function header(title='MY FINANCE',sub='Personal Financial Planner'){
@@ -213,7 +216,21 @@ function dashboard(){
   const prevKey=(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return monthKey(d)})();
   const prev=data.snapshots.find(s=>s.month===prevKey);
   const pct=prev&&Number(prev.netWorth)!==0?((t.netWorth-Number(prev.netWorth))/Math.abs(Number(prev.netWorth))*100):null;
-  return `${header()}<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section><div class="grid4"><button class="mini liquid kpi-card" data-kpi="liquid"><div class="t">◉ เงินพร้อมใช้</div><div class="v">${THB(t.liquidMoney)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini income kpi-card" data-kpi="income"><div class="t">↑ รายรับ</div><div class="v">${THB(t.income)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini expense kpi-card" data-kpi="expense"><div class="t">↓ รายจ่าย</div><div class="v">${THB(t.expense)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini cashflow kpi-card" data-kpi="cashflow"><div class="t">↕ Cash Flow</div><div class="v">${THB(t.cashflow)}</div><small>แตะเพื่อดูรายละเอียด</small></button></div>${financialPulse()}${moneyCalendar()}${spendingCard()}${budgetSummary()}${projectDashboard()}${healthCard()}${goalsSummary()}${recentTx()}`
+  const map={pulse:financialPulse,upcoming:upcomingCard,calendar:moneyCalendar,spending:spendingCard,budget:budgetSummary,projects:projectDashboard,health:healthCard,goals:goalsSummary,recent:recentTx};
+  const order=data.settings?.dashboardCards||Object.keys(map);
+  const cards=order.filter(k=>map[k]).map(k=>map[k]()).join('');
+  return `${header()}<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section><div class="grid4"><button class="mini liquid kpi-card" data-kpi="liquid"><div class="t">◉ เงินพร้อมใช้</div><div class="v">${THB(t.liquidMoney)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini income kpi-card" data-kpi="income"><div class="t">↑ รายรับ</div><div class="v">${THB(t.income)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini expense kpi-card" data-kpi="expense"><div class="t">↓ รายจ่าย</div><div class="v">${THB(t.expense)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini cashflow kpi-card" data-kpi="cashflow"><div class="t">↕ Cash Flow</div><div class="v">${THB(t.cashflow)}</div><small>แตะเพื่อดูรายละเอียด</small></button></div>${cards}`
+}
+
+function reminderDate(r){
+  if(r.date)return r.date;
+  const now=new Date(), y=now.getFullYear(),m=now.getMonth()+1,d=Math.max(1,Math.min(28,Number(r.dayStart||1)));
+  let dt=new Date(y,m-1,d); if(dt < new Date(now.getFullYear(),now.getMonth(),now.getDate()) && r.repeat==='monthly')dt=new Date(y,m,d);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+function upcomingCard(){
+  const list=(data.reminders||[]).filter(r=>!r.done).map(r=>({...r,next:reminderDate(r)})).sort((a,b)=>a.next.localeCompare(b.next)).slice(0,5);
+  return `<section class="section upcoming-section"><div class="section-title"><h2>Recurring & Upcoming</h2><button class="text-add" id="addReminder">+ เพิ่ม</button></div><div class="card premium-list">${list.length?list.map(r=>`<button class="premium-row" data-reminder-id="${r.id}"><div class="row-icon">${r.type==='important'?'▣':r.repeat==='monthly'?'↻':'○'}</div><div class="row-main"><b>${esc(r.title)}</b><small>${r.location?esc(r.location)+' · ':''}${r.repeat==='monthly'?`ทุกเดือน วันที่ ${r.dayStart}${r.dayEnd?`–${r.dayEnd}`:''}`:new Date(r.next+'T12:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})}</small></div><div class="row-right">${r.repeat==='monthly'?'ประจำ':'Upcoming'} <span>›</span></div></button>`).join(''):'<div class="empty compact">ยังไม่มีสิ่งที่ต้องทำ · เพิ่มบิล นัดหมาย หรือข้อมูลสำคัญได้</div>'}</div></section>`;
 }
 
 function financialPulse(){
@@ -236,9 +253,10 @@ function moneyCalendar(){
     const inc=tx.filter(x=>x.type==='income').reduce((a,x)=>a+Number(x.amount||0),0);
     const exp=tx.filter(x=>x.type==='expense').reduce((a,x)=>a+Number(x.amount||0),0)-tx.filter(x=>x.type==='reimbursement').reduce((a,x)=>a+Number(x.amount||0),0);
     const checked=(data.verifiedEmptyDays||[]).includes(date);
+    const hasReminder=(data.reminders||[]).some(r=>!r.done&&(r.date===date||(r.repeat==='monthly'&&Number(r.dayStart)===d)));
     const todayClass=date===today()?' today':'';
     const active=tx.length?' has-tx':checked?' checked':'';
-    cells.push(`<button class="cal-cell${todayClass}${active}" data-cal-date="${date}"><span class="cal-day">${d}</span>${inc?`<i class="cal-in">+${num(inc)}</i>`:''}${exp>0?`<i class="cal-out">-${num(exp)}</i>`:exp<0?`<i class="cal-in">+${num(Math.abs(exp))}</i>`:''}${!tx.length&&checked?'<i class="cal-ok">✓</i>':''}</button>`);
+    cells.push(`<button class="cal-cell${todayClass}${active}" data-cal-date="${date}"><span class="cal-day">${d}</span>${inc?`<i class="cal-in">+${num(inc)}</i>`:''}${exp>0?`<i class="cal-out">-${num(exp)}</i>`:exp<0?`<i class="cal-in">+${num(Math.abs(exp))}</i>`:''}${hasReminder?'<i class="cal-rem">•</i>':''}${!tx.length&&checked?'<i class="cal-ok">✓</i>':''}</button>`);
   }
   const label=new Date(yy,mm-1,1).toLocaleDateString('th-TH',{month:'long',year:'numeric'});
   return `<section class="section"><div class="section-title"><h2>📅 Money Calendar</h2><span>แตะวันเพื่อดู/เพิ่มรายการ</span></div><div class="card calendar-card"><div class="cal-head"><button class="cal-nav" id="calPrev" aria-label="เดือนก่อน">‹</button><b>${label}</b><button class="cal-nav" id="calNext" aria-label="เดือนถัดไป">›</button></div><div class="cal-week">${labels.map(x=>`<span>${x}</span>`).join('')}</div><div class="cal-grid">${cells.join('')}</div><div class="cal-legend"><span><i class="legend-dot in"></i>รับ</span><span><i class="legend-dot out"></i>จ่ายสุทธิ</span><span>✓ ตรวจแล้วไม่มีรายการ</span></div></div></section>`;
@@ -249,6 +267,7 @@ function calendarDaySheet(){
   const inc=tx.filter(x=>x.type==='income').reduce((s,x)=>s+Number(x.amount||0),0);
   const exp=tx.filter(x=>x.type==='expense').reduce((s,x)=>s+Number(x.amount||0),0)-tx.filter(x=>x.type==='reimbursement').reduce((s,x)=>s+Number(x.amount||0),0);
   const checked=(data.verifiedEmptyDays||[]).includes(date);
+    const hasReminder=(data.reminders||[]).some(r=>!r.done&&(r.date===date||(r.repeat==='monthly'&&Number(r.dayStart)===d)));
   const title=new Date(date+'T12:00:00').toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>📅 ${title}</h3><div class="day-kpis"><div><small>รับ</small><b class="pos">${THB(inc)}</b></div><div><small>จ่ายสุทธิ</small><b class="neg">${THB(exp)}</b></div><div><small>สุทธิ</small><b class="${inc-exp>=0?'pos':'neg'}">${inc-exp>=0?'+':''}${THB(inc-exp)}</b></div></div><button class="primary" id="addOnCalendarDay">+ เพิ่มรายการในวันนี้</button>${tx.length?`<div class="card tx-list day-list">${tx.map(txRow).join('')}</div>`:`<div class="empty compact">ยังไม่มีรายการในวันนี้</div><button class="secondary" id="toggleEmptyDay">${checked?'ยกเลิก ✓ ตรวจแล้วไม่มีรายการ':'✓ ยืนยันว่าไม่มีรายการวันนี้'}</button>`}</div></div>`;
 }
@@ -377,17 +396,18 @@ function assetBrand(a){
   if(/gsb|ออมสิน|mymo/.test(n))return {key:'gsb',name:'GSB'};
   if(/bbl|bangkok bank|กรุงเทพ/.test(n))return {key:'bbl',name:'Bangkok Bank'};
   if(/baac|ธกส|ธ\.ก\.ส/.test(n))return {key:'baac',name:'BAAC'};
-  if(/สหกรณ์|coop/.test(n))return {key:'fund',name:'สหกรณ์/กองทุน'};
-  if(a?.kind==='cash'&&/เงินสด|cash/.test(n))return {key:'wallet',name:'เงินสด'};
-  if(a?.kind==='stock')return {key:'fund',name:'หุ้น/กองทุน'};
+  if(/สหกรณ์\s*บก|coop/.test(n))return {key:'other',name:'ทรัพย์สินอื่น'};
+  if(/สหกรณ์/.test(n))return {key:'fund',name:'สหกรณ์/กองทุน'};
+  if(a?.kind==='cash'&&/เงินสด|cash/.test(n))return {key:'cashstack',name:'เงินสด'};
+  if(a?.kind==='stock')return {key:'investment',name:'หุ้น/กองทุน'};
   if(a?.kind==='gold')return {key:'gold',name:'ทอง'};
-  if(a?.kind==='property')return {key:/บ้าน|house|home/.test(n)?'house':'land',name:'ที่ดิน/อสังหาฯ'};
+  if(a?.kind==='property')return {key:/บ้านมะโม/.test(n)?'land':(/บ้าน|house|home/.test(n)?'house':'land'),name:'ที่ดิน/อสังหาฯ'};
   if(a?.kind==='vehicle')return {key:'vehicle',name:'รถ/ยานพาหนะ'};
   if(a?.kind==='debt')return {key:'other',name:'หนี้สิน'};
   return {key:'other',name:'ทรัพย์สินอื่น'};
 }
 const ASSET_ICON_KEYS=new Set(['bofa','scb','ktb','kbank','gsb','ttb','bbl','honda','mitsubishi','gpf','gold','land','house','other','wallet','fund']);
-function assetIcon(a){const b=assetBrand(a);return ASSET_ICON_KEYS.has(b.key)?`<img class="bank-logo asset-picture" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">●</span>`}
+function assetIcon(a){const b=assetBrand(a);if(b.key==='cashstack')return `<span class="asset-glyph cash-glyph">💵</span>`;if(b.key==='investment')return `<span class="asset-glyph invest-glyph">📈</span>`;if(b.key==='vehicle')return `<span class="asset-glyph vehicle-glyph">🚘</span>`;if(b.key==='other')return `<span class="asset-glyph other-glyph">⌚<i>💍</i></span>`;return ASSET_ICON_KEYS.has(b.key)?`<img class="bank-logo asset-picture" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">●</span>`}
 function bankRank(a){
   const key=assetBrand(a).key;
   const order=['ktb','kbank','gsb','scb','bbl','baac','ttb','bofa','wallet','default'];
@@ -400,19 +420,20 @@ function sortedAssetsForView(list){
     if(ka!==kb)return ka-kb;
     if(x.a.kind==='cash'&&y.a.kind==='cash'){
       const br=bankRank(x.a)-bankRank(y.a); if(br)return br;
+      if(assetBrand(x.a).key==='ttb'&&assetBrand(y.a).key==='ttb'){const ax=/all free/i.test(x.a.name||'')?0:1, ay=/all free/i.test(y.a.name||'')?0:1;if(ax!==ay)return ax-ay;}
       const bn=assetBrand(x.a).name.localeCompare(assetBrand(y.a).name,'th'); if(bn)return bn;
     }
     return x.i-y.i;
   }).map(x=>x.a);
 }
 function assets(){
-  const t=totals(); const kinds=[['cash','เงินสด/ธนาคาร','wallet.png'],['stock','หุ้น/กองทุน','fund.png'],['gold','ทอง','gold.png'],['property','ที่ดิน/อสังหาฯ','land.png'],['vehicle','รถ/ยานพาหนะ','vehicle'],['other','ทรัพย์สินอื่น','other.png']];
+  const t=totals(); const kinds=[['cash','เงินสด/ธนาคาร','💵'],['stock','หุ้น/กองทุน','📈'],['gold','ทอง','gold.png'],['property','ที่ดิน/อสังหาฯ','land.png'],['vehicle','รถ/ยานพาหนะ','🚘'],['other','ทรัพย์สินอื่น','⌚']];
   const rawFiltered=assetFilter==='all'?data.assets:data.assets.filter(a=>a.kind===assetFilter);
   const filtered=sortedAssetsForView(rawFiltered);
   const title=assetFilter==='all'?'รายการทรัพย์สิน':assetKindLabel(assetFilter);
   const inv=investmentSummary();
   const investBox=assetFilter==='stock'?`<section class="section"><div class="card invest-summary"><small>Investment Portfolio</small><div class="invest-grid"><div><span>ต้นทุนรวม</span><b>${THB(inv.cost)}</b></div><div><span>มูลค่าปัจจุบัน</span><b>${THB(inv.value)}</b></div><div><span>Unrealized P/L</span><b class="${inv.pl>=0?'pos':'neg'}">${inv.pl>=0?'+':''}${THB(inv.pl)} (${inv.pct>=0?'+':''}${inv.pct.toFixed(2)}%)</b></div></div></div></section>`:'';
-  return `${header('Assets','ทรัพย์สินและฐานะสุทธิ')}<div class="title-row"><h2 class="page-title">My Wealth</h2><small>Net Worth ${THB(t.netWorth)}</small></div><div class="asset-grid">${kinds.map(([k,n,ic])=>{const list=data.assets.filter(a=>a.kind===k);const v=list.reduce((s,a)=>s+Number(a.value||0),0);return `<button class="asset-card asset-card-btn ${assetFilter===k?'selected':''}" data-asset-kind="${k}"><div class="a-label">${ic.includes('.')?`<img class="kind-icon" src="${ic}" alt="">`:`<span class="kind-icon-fallback">${ic}</span>`} ${n}</div><div class="a-value">${THB(v)}</div><div class="a-sub">${list.length} รายการ · แตะเพื่อดู</div></button>`}).join('')}</div>${assetFilter!=='all'?`<button class="secondary asset-back" id="assetBack">← ดูทรัพย์สินทั้งหมด</button>`:''}${investBox}${t.debtTotal>0?`<section class="section"><div class="card debt-card"><small>หนี้สินรวม</small><b>${THB(t.debtTotal)}</b></div></section>`:''}<section class="section"><div class="section-title"><h2>${esc(title)}</h2><span id="addAsset">+ เพิ่ม</span></div><div class="card tx-list">${filtered.length?filtered.map((a,idx)=>{const trackPL=['stock','gold','property','vehicle','other'].includes(a.kind);const pl=trackPL?Number(a.value||0)-Number(a.cost||0)-Number(a.improvementCost||0):0;return `<button class="tx tx-button asset-row asset-stripe-${idx%2}" data-asset-id="${a.id}"><div class="tx-ico premium-asset-ico">${assetIcon(a)}</div><div class="tx-main"><b>${esc(a.name)}</b><small>${esc(assetKindLabel(a.kind))}${trackPL&&Number(a.cost||0)>0?` · P/L <span class="${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${THB(pl)}</span>`:''}</small></div><div class="amt ${a.kind==='debt'?'neg':''}">${THB(a.value)}</div></button>`}).join(''):'<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'}</div></section>`
+  return `${header('Assets','ทรัพย์สินและฐานะสุทธิ')}<div class="title-row"><h2 class="page-title">My Wealth</h2><small>Net Worth ${THB(t.netWorth)}</small></div><div class="asset-grid">${kinds.map(([k,n,ic])=>{const list=data.assets.filter(a=>a.kind===k);const v=list.reduce((s,a)=>s+Number(a.value||0),0);return `<button class="asset-card asset-card-btn ${assetFilter===k?'selected':''}" data-asset-kind="${k}"><div class="a-label">${ic.includes('.')?`<img class="kind-icon" src="${ic}" alt="">`:`<span class="kind-icon-fallback">${ic}</span>`} ${n}</div><div class="a-value">${THB(v)}</div><div class="a-sub">${list.length} รายการ · แตะเพื่อดู</div></button>`}).join('')}</div>${assetFilter!=='all'?`<button class="secondary asset-back" id="assetBack">← ดูทรัพย์สินทั้งหมด</button>`:''}${investBox}${t.debtTotal>0?`<section class="section"><div class="card debt-card"><small>หนี้สินรวม</small><b>${THB(t.debtTotal)}</b></div></section>`:''}<section class="section"><div class="section-title"><h2>${esc(title)}</h2><span id="addAsset">+ เพิ่ม</span></div><div class="card tx-list">${filtered.length?filtered.map((a,idx)=>{const trackPL=['stock','gold','property','vehicle','other'].includes(a.kind);const pl=trackPL?Number(a.value||0)-Number(a.cost||0)-Number(a.improvementCost||0):0;return `<button class="tx tx-button asset-row asset-stripe-${idx%2}" data-asset-id="${a.id}"><div class="tx-ico premium-asset-ico">${assetIcon(a)}</div><div class="tx-main"><b>${esc(a.name)}</b><small>${esc(assetKindLabel(a.kind))}${a.kind==='stock'&&(/กบข|gpf|ltf/i.test(a.name||''))?' · Long-term Portfolio':''}${trackPL&&Number(a.cost||0)>0?` · P/L <span class="${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${THB(pl)}</span>`:''}</small></div><div class="amt ${a.kind==='debt'?'neg':''}">${THB(a.value)}</div></button>`}).join(''):'<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'}</div></section>`
 }
 function plan(){
   const budgets=currentBudgetMap(); const sums=monthlyExpenseByCategory();
@@ -447,7 +468,7 @@ function projectPlan(){
 
 function settings(){
   const hasPin=!!(hasSecureVault||legacyPin||currentPin);
-  return `${header('Settings','Privacy, Backup & App Lock')}<h2 class="page-title">ความเป็นส่วนตัวและข้อมูล</h2><div class="settings-list"><div class="setting"><div><b>App Lock</b><small>${hasPin?'เข้ารหัสข้อมูลแล้ว':'ยังไม่ได้ตั้ง PIN / Encryption'}</small></div><button id="${hasPin?'changePin':'setPin'}">${hasPin?'Change':'Set PIN'}</button></div><div class="setting"><div><b>Auto Lock</b><small>${hasPin?'ล็อกเมื่อออกจากแอปเกินเวลาที่กำหนด':'เปิดใช้ได้หลังตั้ง PIN'}</small></div><input class="toggle" id="autoLock" type="checkbox" ${data.autoLock?'checked':''} ${hasPin?'':'disabled'}></div><div class="setting"><div><b>เวลาล็อกอัตโนมัติ</b><small>หลังออกจากแอป</small></div><select id="lockMinutes" ${hasPin?'':'disabled'}><option value="1" ${data.autoLockMinutes==1?'selected':''}>1 นาที</option><option value="5" ${data.autoLockMinutes==5?'selected':''}>5 นาที</option><option value="15" ${data.autoLockMinutes==15?'selected':''}>15 นาที</option></select></div><div class="setting"><div><b>Encrypted Backup</b><small>ไฟล์สำรองเข้ารหัส AES-256-GCM และต้องใช้รหัสผ่านเพื่อเปิด</small></div><button id="exportBtn">Export</button></div><div class="setting"><div><b>Restore Encrypted Backup</b><small>นำไฟล์สำรองที่เข้ารหัสกลับเข้าแอป</small></div><button id="importBtn">Import</button></div><div class="setting"><div><b>บันทึก Snapshot เดือนนี้</b><small>เก็บ Net Worth เพื่อเทียบเดือนถัดไป</small></div><button id="snapshotBtn">Save</button></div><div class="setting"><div><b>บัญชีจ่ายหลัก</b><small>ใช้เป็นค่าเริ่มต้นเฉพาะรายการรายจ่าย</small></div><select id="defaultExpenseAsset"><option value="">อัตโนมัติ: TTB ALL FREE</option>${cashAssets().map(a=>`<option value="${a.id}" ${data.settings?.defaultExpenseAssetId===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}</select></div>${hasPin?`<div class="setting"><div><b>ล็อกทันที</b><small>กลับไปหน้า PIN</small></div><button id="lockNow">Lock</button></div>`:''}</div><div class="notice"><b>Security Core · AES-256</b><br>เมื่อเปิด App Lock ข้อมูลหลักในเครื่องถูกเข้ารหัสด้วย AES-256-GCM โดยคีย์ที่ derive จาก PIN ด้วย PBKDF2-SHA-256 (210,000 iterations) แอปนี้ไม่มี Cloud Sync/Analytics/API ส่งข้อมูลการเงินออกไป ควรเก็บ Encrypted Backup ไว้ในเครื่องอย่างปลอดภัย</div><div class="setting"><div><b>Audit Trail</b><small>เก็บประวัติการเพิ่ม แก้ไข ลบ และ Reconcile ล่าสุด</small></div><span>${(data.auditLog||[]).length} รายการ</span></div><div class="version">MY FINANCE v${APP_VERSION}</div>`
+  return `${header('Settings','Privacy, Backup & App Lock')}<h2 class="page-title">ความเป็นส่วนตัวและข้อมูล</h2><div class="settings-list"><div class="setting"><div><b>App Lock</b><small>${hasPin?'เข้ารหัสข้อมูลแล้ว':'ยังไม่ได้ตั้ง PIN / Encryption'}</small></div><button id="${hasPin?'changePin':'setPin'}">${hasPin?'Change':'Set PIN'}</button></div><div class="setting"><div><b>Auto Lock</b><small>${hasPin?'ล็อกเมื่อออกจากแอปเกินเวลาที่กำหนด':'เปิดใช้ได้หลังตั้ง PIN'}</small></div><input class="toggle" id="autoLock" type="checkbox" ${data.autoLock?'checked':''} ${hasPin?'':'disabled'}></div><div class="setting"><div><b>เวลาล็อกอัตโนมัติ</b><small>หลังออกจากแอป</small></div><select id="lockMinutes" ${hasPin?'':'disabled'}><option value="1" ${data.autoLockMinutes==1?'selected':''}>1 นาที</option><option value="5" ${data.autoLockMinutes==5?'selected':''}>5 นาที</option><option value="15" ${data.autoLockMinutes==15?'selected':''}>15 นาที</option></select></div><div class="setting"><div><b>Customize My Dashboard</b><small>เลือกการ์ดที่แสดงและจัดลำดับได้ · การซ่อนไม่ลบข้อมูล</small></div><button id="customizeDashboard">Customize</button></div><div class="setting"><div><b>Encrypted Backup</b><small>ไฟล์สำรองเข้ารหัส AES-256-GCM และต้องใช้รหัสผ่านเพื่อเปิด</small></div><button id="exportBtn">Export</button></div><div class="setting"><div><b>Restore Encrypted Backup</b><small>นำไฟล์สำรองที่เข้ารหัสกลับเข้าแอป</small></div><button id="importBtn">Import</button></div><div class="setting"><div><b>บันทึก Snapshot เดือนนี้</b><small>เก็บ Net Worth เพื่อเทียบเดือนถัดไป</small></div><button id="snapshotBtn">Save</button></div><div class="setting"><div><b>บัญชีจ่ายหลัก</b><small>ใช้เป็นค่าเริ่มต้นเฉพาะรายการรายจ่าย</small></div><select id="defaultExpenseAsset"><option value="">อัตโนมัติ: TTB ALL FREE</option>${cashAssets().map(a=>`<option value="${a.id}" ${data.settings?.defaultExpenseAssetId===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}</select></div>${hasPin?`<div class="setting"><div><b>ล็อกทันที</b><small>กลับไปหน้า PIN</small></div><button id="lockNow">Lock</button></div>`:''}</div><div class="notice"><b>Security Core · AES-256</b><br>เมื่อเปิด App Lock ข้อมูลหลักในเครื่องถูกเข้ารหัสด้วย AES-256-GCM โดยคีย์ที่ derive จาก PIN ด้วย PBKDF2-SHA-256 (210,000 iterations) แอปนี้ไม่มี Cloud Sync/Analytics/API ส่งข้อมูลการเงินออกไป ควรเก็บ Encrypted Backup ไว้ในเครื่องอย่างปลอดภัย</div><div class="setting"><div><b>Audit Trail</b><small>เก็บประวัติการเพิ่ม แก้ไข ลบ และ Reconcile ล่าสุด</small></div><span>${(data.auditLog||[]).length} รายการ</span></div><div class="version">MY FINANCE v${APP_VERSION}</div>`
 }
 function bottomNav(){
   const items=[['dashboard','◆','Dashboard'],['transactions','≡','Transactions'],['add','+',''],['assets','◈','Assets'],['plan','◎','Plan']];
@@ -463,6 +484,8 @@ function sheet(){
   if(modal==='pin')return pinSheet();
   if(modal==='reconcile')return reconcileSheet();
   if(modal==='calendarDay')return calendarDaySheet();
+  if(modal==='reminder'||modal==='editReminder')return reminderSheet();
+  if(modal==='dashboardCustomize')return dashboardCustomizeSheet();
   if(modal==='kpiDetail')return kpiDetailSheet();
   return '';
 }
@@ -522,6 +545,15 @@ function reconcileSheet(){
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>Reconcile · ${esc(a.name)}</h3><p class="field-hint">ใส่ยอดที่มีอยู่จริงตอนนี้ ระบบจะปรับ Asset โดยไม่สร้างรายรับ/รายจ่ายปลอม และเก็บบันทึกส่วนต่างไว้</p><form id="reconcileForm"><div class="field"><label>ยอดในแอป</label><input value="${num(a.value)}" disabled></div><div class="field"><label>ยอดจริงตอนนี้</label><input id="actualBalance" class="money-input" type="text" inputmode="decimal" required></div><div class="field"><label>หมายเหตุ</label><input id="reconcileNote" value="ตรวจยอดตามเงินจริง"></div><button class="primary">ปรับยอด</button></form></div></div>`
 }
 
+function reminderSheet(){
+  const editing=modal==='editReminder', r=editing?(data.reminders||[]).find(x=>x.id===editId):null;
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${editing?'แก้ไข':'เพิ่ม'} Recurring & Upcoming</h3><form id="reminderForm"><div class="field"><label>เรื่อง</label><input id="remTitle" value="${esc(r?.title||'')}" placeholder="เช่น จ่ายบัตรเครดิต / รังวัดที่ดิน" required></div><div class="field"><label>ประเภท</label><select id="remType"><option value="task" ${r?.type!=='important'?'selected':''}>นัดหมาย / สิ่งที่ต้องทำ</option><option value="important" ${r?.type==='important'?'selected':''}>ข้อมูลสำคัญ / ที่เก็บเอกสาร</option></select></div><div class="field"><label>รูปแบบ</label><select id="remRepeat"><option value="once" ${r?.repeat!=='monthly'?'selected':''}>ครั้งเดียว</option><option value="monthly" ${r?.repeat==='monthly'?'selected':''}>ทุกเดือน</option></select></div><div class="field"><label>วันที่ (สำหรับครั้งเดียว)</label><input id="remDate" type="date" value="${esc(r?.date||today())}"></div><div class="row2"><div class="field"><label>วันเริ่ม (รายเดือน)</label><input id="remDayStart" type="number" min="1" max="31" value="${r?.dayStart||''}" placeholder="6"></div><div class="field"><label>วันสิ้นสุด</label><input id="remDayEnd" type="number" min="1" max="31" value="${r?.dayEnd||''}" placeholder="10"></div></div><div class="field"><label>สถานที่ / ติดต่อ</label><input id="remLocation" value="${esc(r?.location||'')}" placeholder="เช่น สำนักงานที่ดิน / โทรหา..."></div><div class="field"><label>รายละเอียด</label><textarea id="remNote" rows="3" placeholder="ไม่เก็บ PIN / OTP / CVV / รหัสผ่าน">${esc(r?.note||'')}</textarea></div><button class="primary">บันทึก</button>${editing?`<button type="button" class="secondary" id="doneReminder">${r?.done?'เปิดงานอีกครั้ง':'✓ ทำแล้ว'}</button><button type="button" class="danger" id="deleteReminder">ลบรายการนี้</button>`:''}</form></div></div>`;
+}
+function dashboardCustomizeSheet(){
+ const labels={pulse:'Financial Pulse',upcoming:'Recurring & Upcoming',calendar:'Money Calendar',spending:'Where My Money Goes',budget:'Budget Summary',projects:'Projects & Properties',health:'Financial Health',goals:'Goals',recent:'Recent Transactions'};
+ const order=data.settings.dashboardCards||Object.keys(labels);
+ return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>Customize My Dashboard</h3><p class="field-hint">ซ่อน = ไม่แสดงเท่านั้น ข้อมูลไม่ถูกลบ · ใช้ ↑ ↓ เพื่อเรียงลำดับ</p><div class="custom-list">${Object.keys(labels).map(k=>{const on=order.includes(k);return `<div class="custom-row" data-custom="${k}"><label><input type="checkbox" data-card-toggle="${k}" ${on?'checked':''}> <b>${labels[k]}</b></label><span><button type="button" data-card-up="${k}">↑</button><button type="button" data-card-down="${k}">↓</button></span></div>`}).join('')}</div><button class="primary" id="closeCustomize">เสร็จ</button></div></div>`;
+}
 function pinSheet(){
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><div class="grab"></div><h3>${(hasSecureVault||legacyPin||currentPin)?'เปลี่ยน PIN / Encryption':'ตั้ง PIN / Encryption'}</h3><form id="pinForm"><div class="field"><label>PIN ใหม่ 4–6 หลัก</label><input id="newPin1" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><div class="field"><label>ยืนยัน PIN</label><input id="newPin2" class="pin" type="password" inputmode="numeric" maxlength="6" required></div><button class="primary">บันทึก PIN</button></form></div></div>`
 }
@@ -531,6 +563,7 @@ function updateCategoryOptions(type,selected=''){
   c.innerHTML=cats.map(x=>`<option ${selected===x?'selected':''}>${esc(x)}</option>`).join('');
 }
 
+function moveDashboardCard(k,dir){const a=[...(data.settings.dashboardCards||[])];const i=a.indexOf(k);if(i<0)return;const j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];data.settings.dashboardCards=a;save();render()}
 function bind(){
   if(!unlocked){
     $('#enterWithoutPin')?.addEventListener('click',()=>{unlocked=true;render()});
@@ -549,6 +582,13 @@ function bind(){
 
   $('#openSettings')?.addEventListener('click',()=>{page='settings';render()});
   $('#quickAdd')?.addEventListener('click',()=>{txDraftDate='';txDraftType='expense';modal='tx';editId=null;render()});
+  $('#addReminder')?.addEventListener('click',()=>{modal='reminder';editId=null;render()});
+  $$('[data-reminder-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.reminderId;modal='editReminder';render()}));
+  $('#customizeDashboard')?.addEventListener('click',()=>{modal='dashboardCustomize';render()});
+  $('#closeCustomize')?.addEventListener('click',()=>{modal=null;render()});
+  $$('[data-card-toggle]').forEach(c=>c.addEventListener('change',()=>{let a=data.settings.dashboardCards||[];const k=c.dataset.cardToggle;if(c.checked&&!a.includes(k))a.push(k);if(!c.checked)a=a.filter(x=>x!==k);data.settings.dashboardCards=a;save();render()}));
+  $$('[data-card-up]').forEach(b=>b.addEventListener('click',()=>moveDashboardCard(b.dataset.cardUp,-1)));
+  $$('[data-card-down]').forEach(b=>b.addEventListener('click',()=>moveDashboardCard(b.dataset.cardDown,1)));
   $('#seeAll')?.addEventListener('click',()=>{page='transactions';render()});
   $('#calPrev')?.addEventListener('click',()=>{const [y,m]=calendarMonth.split('-').map(Number);const d=new Date(y,m-2,1);calendarMonth=monthKey(d);render()});
   $('#calNext')?.addEventListener('click',()=>{const [y,m]=calendarMonth.split('-').map(Number);const d=new Date(y,m,1);calendarMonth=monthKey(d);render()});
@@ -617,6 +657,9 @@ function bind(){
   $('#projectDetailForm')?.addEventListener('submit',e=>{e.preventDefault();const invested=parseMoney($('#projectOpeningInvested').value),returned=parseMoney($('#projectOpeningReturned').value),expense=parseMoney($('#projectOpeningExpense').value),cutoff=$('#projectOpeningCutoff').value||'',note=$('#projectOpeningNote').value.trim();if(![invested,returned,expense].every(Number.isFinite)||invested<0||returned<0||expense<0)return alert('กรุณาใส่จำนวนเงินที่ถูกต้อง');data.settings.projectOpening=data.settings.projectOpening&&typeof data.settings.projectOpening==='object'?data.settings.projectOpening:{};data.settings.projectOpening[editId]={invested,returned,expense,cutoff,note};audit('แก้ไขยอดย้อนหลัง Project',`${editId}: ลงทุน ${THB(invested)} · รายรับ ${THB(returned)} · ค่าใช้จ่าย ${THB(expense)}`);save();modal=null;editId=null;render()});
   $('#clearProjectOpening')?.addEventListener('click',()=>{if(confirm('ล้างเฉพาะยอดตั้งต้นของ Project นี้ใช่หรือไม่? รายการรายรับ/รายจ่ายที่บันทึกไว้จะไม่ถูกลบ')){if(data.settings?.projectOpening)delete data.settings.projectOpening[editId];audit('ล้างยอดย้อนหลัง Project',editId);save();modal=null;editId=null;render()}});
 
+  $('#reminderForm')?.addEventListener('submit',e=>{e.preventDefault();const repeat=$('#remRepeat').value;const row={id:editId||uid(),title:$('#remTitle').value.trim(),type:$('#remType').value,repeat,date:repeat==='once'?$('#remDate').value:'',dayStart:repeat==='monthly'?Number($('#remDayStart').value||0):0,dayEnd:repeat==='monthly'?Number($('#remDayEnd').value||0):0,location:$('#remLocation').value.trim(),note:$('#remNote').value.trim(),done:modal==='editReminder'?!!(data.reminders.find(x=>x.id===editId)?.done):false};if(!row.title)return alert('กรุณาใส่เรื่อง');if(repeat==='monthly'&&(row.dayStart<1||row.dayStart>31))return alert('กรุณาใส่วันเริ่ม 1–31');if(modal==='editReminder'){const i=data.reminders.findIndex(x=>x.id===editId);if(i>=0)data.reminders[i]=row}else data.reminders.push(row);save();modal=null;editId=null;render()});
+  $('#doneReminder')?.addEventListener('click',()=>{const r=data.reminders.find(x=>x.id===editId);if(r){r.done=!r.done;save()}modal=null;editId=null;render()});
+  $('#deleteReminder')?.addEventListener('click',()=>{if(confirm('ลบรายการเตือนนี้ใช่หรือไม่?')){data.reminders=data.reminders.filter(x=>x.id!==editId);save();modal=null;editId=null;render()}});
   $('#setPin')?.addEventListener('click',()=>{modal='pin';render()});
   $('#changePin')?.addEventListener('click',()=>{modal='pin';render()});
   $('#pinForm')?.addEventListener('submit',async e=>{e.preventDefault();const a=$('#newPin1').value,b=$('#newPin2').value;if(!/^\d{6}$/.test(a))return alert('เพื่อความปลอดภัย V1.2.2 กำหนด PIN 6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');currentPin=a;legacyPin=null;data.pin=null;data.autoLock=true;save();await saveSeq;localStorage.removeItem(DB_KEY);modal=null;render();alert('เปิดการเข้ารหัสข้อมูลในเครื่องแล้ว')});
