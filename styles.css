@@ -108,3 +108,11 @@ body{font-size:15px;color:var(--ui-ink);background:#f7f4ed}
 .lock-card{padding:24px 22px!important;border-radius:24px!important;background:rgba(250,248,243,.94)!important;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .lock-logo{width:72px!important;height:72px!important;border-radius:22px!important;font-size:34px!important}.lock h1{font-size:27px!important;margin:10px 0 5px!important}.lock p{font-size:13px!important;line-height:1.4!important}.lock .field label{font-size:14px!important}.lock .pin{font-size:29px!important;min-height:58px!important;letter-spacing:9px!important}.lock .primary{font-size:16px!important;padding:14px!important}.lock .notice{font-size:11px!important;line-height:1.4!important}
 @media(max-width:390px){.brand h1{font-size:23px!important}.month-btn{font-size:16px!important}.hero .value{font-size:29px!important}.tx-main b{font-size:15px!important}.tx-money .amt{font-size:16px!important}.lock h1{font-size:25px!important}}
+
+/* V1.8.2 Assets grouping + official-style bank icons */
+.asset-grid .a-value{color:var(--navy)!important}
+.bank-logo{width:38px;height:38px;border-radius:11px;display:block;object-fit:cover;box-shadow:0 3px 9px rgba(20,42,54,.13);border:1px solid rgba(20,42,54,.08)}
+.asset-row .premium-asset-ico{display:grid;place-items:center}
+.asset-brand.gsb{background:linear-gradient(145deg,#ef82a2,#d74e7f);color:#fff}
+.asset-brand.bbl{background:linear-gradient(145deg,#1e7ff2,#0e56b7);color:#fff}
+.asset-brand.baac{background:linear-gradient(145deg,#3b8a61,#1e5f42);color:#fff}

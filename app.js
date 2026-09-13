@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.8.1';
+const APP_VERSION='1.8.2';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -366,24 +366,46 @@ function investmentSummary(){
 }
 function assetBrand(a){
   const n=(a?.name||'').toLowerCase();
-  if(/ttb|ทหารไทย/.test(n))return {key:'ttb',label:'ttb'};
-  if(/bofa|bank of america|boa/.test(n))return {key:'bofa',label:'BofA'};
-  if(/kbank|กสิกร/.test(n))return {key:'kbank',label:'K'};
-  if(/ktb|กรุงไทย/.test(n))return {key:'ktb',label:'KTB'};
-  if(/scb|ไทยพาณิชย์/.test(n))return {key:'scb',label:'SCB'};
-  if(/สหกรณ์|coop/.test(n))return {key:a.kind==='stock'?'coop-stock':'coop',label:a.kind==='stock'?'↗':'◇'};
-  if(a?.kind==='cash'&&/เงินสด|cash/.test(n))return {key:'wallet',label:'฿'};
-  if(a?.kind==='stock')return {key:'stock',label:'↗'};
-  if(a?.kind==='gold')return {key:'gold',label:'Au'};
-  if(a?.kind==='property')return {key:'property',label:'⌂'};
-  if(a?.kind==='vehicle')return {key:'vehicle',label:'◒'};
-  if(a?.kind==='debt')return {key:'debt',label:'−'};
-  return {key:'default',label:'◆'};
+  if(/ttb|ทหารไทย/.test(n))return {key:'ttb',label:'ttb',name:'TTB'};
+  if(/bofa|bank of america|boa/.test(n))return {key:'bofa',label:'BofA',name:'Bank of America'};
+  if(/kbank|k plus|กสิกร/.test(n))return {key:'kbank',label:'K',name:'KBank'};
+  if(/ktb|krungthai|กรุงไทย/.test(n))return {key:'ktb',label:'KTB',name:'Krungthai'};
+  if(/scb|ไทยพาณิชย์/.test(n))return {key:'scb',label:'SCB',name:'SCB'};
+  if(/gsb|ออมสิน|mymo/.test(n))return {key:'gsb',label:'GSB',name:'GSB'};
+  if(/bbl|bangkok bank|กรุงเทพ/.test(n))return {key:'bbl',label:'BBL',name:'Bangkok Bank'};
+  if(/baac|ธกส|ธ\.ก\.ส/.test(n))return {key:'baac',label:'BAAC',name:'BAAC'};
+  if(/สหกรณ์|coop/.test(n))return {key:a.kind==='stock'?'coop-stock':'coop',label:a.kind==='stock'?'↗':'◇',name:'สหกรณ์'};
+  if(a?.kind==='cash'&&/เงินสด|cash/.test(n))return {key:'wallet',label:'฿',name:'เงินสด'};
+  if(a?.kind==='stock')return {key:'stock',label:'↗',name:'หุ้น/กองทุน'};
+  if(a?.kind==='gold')return {key:'gold',label:'Au',name:'ทอง'};
+  if(a?.kind==='property')return {key:'property',label:'⌂',name:'อสังหาฯ'};
+  if(a?.kind==='vehicle')return {key:'vehicle',label:'◒',name:'รถ/ยานพาหนะ'};
+  if(a?.kind==='debt')return {key:'debt',label:'−',name:'หนี้สิน'};
+  return {key:'default',label:'◆',name:'อื่น ๆ'};
 }
-function assetIcon(a){const b=assetBrand(a);return `<span class="asset-brand ${b.key}">${esc(b.label)}</span>`}
+const BANK_ICON_KEYS=new Set(['bofa','scb','ktb','kbank','gsb','ttb','bbl']);
+function assetIcon(a){const b=assetBrand(a);return BANK_ICON_KEYS.has(b.key)?`<img class="bank-logo" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">${esc(b.label)}</span>`}
+function bankRank(a){
+  const key=assetBrand(a).key;
+  const order=['ktb','kbank','gsb','scb','bbl','baac','ttb','bofa','wallet','default'];
+  const i=order.indexOf(key); return i<0?order.length:i;
+}
+function sortedAssetsForView(list){
+  const kindOrder={vehicle:0,cash:1,stock:2,gold:3,property:4,other:5,debt:6};
+  return list.map((a,i)=>({a,i})).sort((x,y)=>{
+    const ka=kindOrder[x.a.kind]??99, kb=kindOrder[y.a.kind]??99;
+    if(ka!==kb)return ka-kb;
+    if(x.a.kind==='cash'&&y.a.kind==='cash'){
+      const br=bankRank(x.a)-bankRank(y.a); if(br)return br;
+      const bn=assetBrand(x.a).name.localeCompare(assetBrand(y.a).name,'th'); if(bn)return bn;
+    }
+    return x.i-y.i;
+  }).map(x=>x.a);
+}
 function assets(){
   const t=totals(); const kinds=[['cash','เงินสด/ธนาคาร','💵'],['stock','หุ้น/กองทุน','📈'],['gold','ทอง','🌑'],['property','ที่ดิน/อสังหาฯ','🏡'],['vehicle','รถ/ยานพาหนะ','🚙'],['other','ทรัพย์สินอื่น','◆']];
-  const filtered=assetFilter==='all'?data.assets:data.assets.filter(a=>a.kind===assetFilter);
+  const rawFiltered=assetFilter==='all'?data.assets:data.assets.filter(a=>a.kind===assetFilter);
+  const filtered=sortedAssetsForView(rawFiltered);
   const title=assetFilter==='all'?'รายการทรัพย์สิน':assetKindLabel(assetFilter);
   const inv=investmentSummary();
   const investBox=assetFilter==='stock'?`<section class="section"><div class="card invest-summary"><small>Investment Portfolio</small><div class="invest-grid"><div><span>ต้นทุนรวม</span><b>${THB(inv.cost)}</b></div><div><span>มูลค่าปัจจุบัน</span><b>${THB(inv.value)}</b></div><div><span>Unrealized P/L</span><b class="${inv.pl>=0?'pos':'neg'}">${inv.pl>=0?'+':''}${THB(inv.pl)} (${inv.pct>=0?'+':''}${inv.pct.toFixed(2)}%)</b></div></div></div></section>`:'';
