@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.9';
+const APP_VERSION='1.9.1';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -31,7 +31,7 @@ let page='dashboard';
 let txFilter='all';
 let assetFilter='all';
 let txDraftType='expense';
-let unlocked=!hasSecureVault&&!legacyPin;
+let unlocked=false;
 let modal=null;
 let editId=null;
 let calendarMonth=monthKey();
@@ -205,7 +205,7 @@ function snapshotCurrentMonth(){
 function render(){ledgerBalanceCache=null;document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
 function lockView(){
   const first=!(hasSecureVault||legacyPin||currentPin);
-  return `<div class="lock"><div class="lock-card v19-lock"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p class="lock-tag">PRIVATE WEALTH</p>${first?`<div class="notice">ยังไม่ได้ตั้ง PIN · เข้าแอปแล้วตั้ง PIN 6 หลักใน Settings</div><button class="primary" id="enterWithoutPin">เข้าแอป</button>`:`<div class="field pin-field"><label>ENTER 6-DIGIT PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><button class="primary" id="unlockBtn">UNLOCK</button>`}<div class="privacy-line">Private • Local-first • Encrypted</div></div></div>`
+  return `<div class="lock"><div class="lock-card v19-lock"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p class="lock-tag">PRIVATE WEALTH</p>${first?`<div class="notice"><b>SECURITY SETUP</b><br>ตั้ง PIN 6 หลักก่อนเข้าใช้งานครั้งแรก ข้อมูลเดิมในเครื่องจะถูกเข้ารหัสหลังตั้ง PIN สำเร็จ</div><div class="field pin-field"><label>NEW 6-DIGIT PIN</label><input id="firstPin1" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><div class="field pin-field"><label>CONFIRM PIN</label><input id="firstPin2" class="pin" inputmode="numeric" maxlength="6" type="password" placeholder="••••••"></div><button class="primary" id="setupPinBtn">SET PIN & UNLOCK</button>`:`<div class="field pin-field"><label>ENTER 6-DIGIT PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><button class="primary" id="unlockBtn">UNLOCK</button>`}<div class="privacy-line">Private • Local-first • Encrypted</div></div></div>`
 }
 function appView(){return `<main class="shell">${page==='dashboard'?dashboard():page==='transactions'?transactions():page==='assets'?assets():page==='plan'?plan():settings()}</main>${bottomNav()}${modal?sheet():''}`}
 function header(title='MY FINANCE',sub='Personal Financial Planner'){
@@ -566,7 +566,8 @@ function updateCategoryOptions(type,selected=''){
 function moveDashboardCard(k,dir){const a=[...(data.settings.dashboardCards||[])];const i=a.indexOf(k);if(i<0)return;const j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];data.settings.dashboardCards=a;save();render()}
 function bind(){
   if(!unlocked){
-    $('#enterWithoutPin')?.addEventListener('click',()=>{unlocked=true;render()});
+    const setup=async()=>{const a=$('#firstPin1')?.value||'',b=$('#firstPin2')?.value||'';if(!/^\d{6}$/.test(a))return alert('กรุณาตั้ง PIN ตัวเลข 6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');try{currentPin=a;legacyPin=null;data.pin=null;data.autoLock=true;unlocked=true;save();await saveSeq;if(!hasSecureVault)throw new Error('vault');localStorage.removeItem(DB_KEY);render();alert('ตั้ง PIN และเข้ารหัสข้อมูลในเครื่องแล้ว')}catch{currentPin=null;unlocked=false;alert('ไม่สามารถสร้าง Secure Vault ได้ กรุณาลองอีกครั้ง')}}; 
+    $('#setupPinBtn')?.addEventListener('click',setup); $('#firstPin2')?.addEventListener('keydown',e=>e.key==='Enter'&&setup());
     const unlock=async()=>{const pin=$('#unlockPin')?.value||'';try{if(hasSecureVault)await unlockSecure(pin);else await secureLegacy(pin);data.lastActive=Date.now();render()}catch{alert('PIN ไม่ถูกต้อง หรือข้อมูลเข้ารหัสไม่สามารถเปิดได้')}};
     $('#unlockBtn')?.addEventListener('click',unlock); $('#unlockPin')?.addEventListener('keydown',e=>e.key==='Enter'&&unlock());
     return;
