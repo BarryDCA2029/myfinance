@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.10.6';
+const APP_VERSION='1.10.7';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -491,7 +491,7 @@ function settings(){
 }
 function bottomNav(){
   const items=[['dashboard','◆','Dashboard'],['transactions','≡','Transactions'],['plan','◎','Plan'],['settings','⚙','Settings']];
-  return `<nav class="bottom">${items.map(([p,i,l])=>`<button class="nav ${page===p?'active':''}" data-page="${p}"><span class="ico">${i}</span>${l}</button>`).join('')}</nav>`
+  return `<nav class="bottom">${items.map(([p,i,l])=>`<button class="nav ${page===p?'active':''}" data-page="${p}"><span class="ico">${i}</span>${l}</button>`).join('')}<button class="quick-add-fab" id="quickAdd" aria-label="เพิ่มรายการ" title="เพิ่มรายการ">+</button></nav>`
 }
 function sheet(){
   if(modal==='tx'||modal==='editTx')return txSheet();
