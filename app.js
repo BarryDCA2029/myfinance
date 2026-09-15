@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.10.4';
+const APP_VERSION='1.10.5';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -220,14 +220,18 @@ function dashboard(){
   const map={pulse:financialPulse,upcoming:upcomingCard,calendar:moneyCalendar,spending:spendingCard,budget:budgetSummary,projects:projectDashboard,health:healthCard,goals:goalsSummary,recent:recentTx};
   const order=data.settings?.dashboardCards||Object.keys(map);
   const enabled=new Set(order);
-  const lead=(enabled.has('upcoming')?upcomingCard():'')+(enabled.has('calendar')?moneyCalendar():'');
+  const upcoming=enabled.has('upcoming')?upcomingCard():'';
+  const calendar=enabled.has('calendar')?moneyCalendar():'';
   const pulse=enabled.has('pulse')?financialPulse():'';
-  // Keep low-priority planning/analysis cards together at the very bottom.
-  // Recent Transactions is the anchor immediately before Budget, Health and Goals.
+  // Stable dashboard order: snapshot first, then tasks/calendar, then analysis.
+  // Low-priority planning cards stay after Recent Transactions.
   const mainRest=order.filter(k=>!['upcoming','calendar','pulse','recent','budget','health','goals'].includes(k)&&map[k]).map(k=>map[k]()).join('');
   const tail=(enabled.has('recent')?recentTx():'')+(enabled.has('budget')?budgetSummary():'')+(enabled.has('health')?healthCard():'')+(enabled.has('goals')?goalsSummary():'');
   const kpis=`<div class="grid4"><button class="mini liquid kpi-card" data-kpi="liquid"><div class="t">◉ เงินพร้อมใช้</div><div class="v">${THB(t.liquidMoney)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini income kpi-card" data-kpi="income"><div class="t">↑ รายรับ</div><div class="v">${THB(t.income)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini expense kpi-card" data-kpi="expense"><div class="t">↓ รายจ่าย</div><div class="v">${THB(t.expense)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini cashflow kpi-card" data-kpi="cashflow"><div class="t">↕ Cash Flow</div><div class="v">${THB(t.cashflow)}</div><small>แตะเพื่อดูรายละเอียด</small></button></div>`;
-  return `${header()}${wealthSwitch('dashboard')}<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section>${lead}${kpis}${pulse}${mainRest}${tail}`
+  let body=`<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section>${kpis}${upcoming}${calendar}${pulse}${mainRest}${tail}`;
+  // Real markup accent bar: avoids fragile pseudo-element rendering/caching on iOS PWA.
+  body=body.replaceAll('<div class="section-title">','<div class="section-accent" aria-hidden="true"><i></i><b></b></div><div class="section-title">');
+  return `${header()}${wealthSwitch('dashboard')}${body}`
 }
 
 function reminderDate(r){
