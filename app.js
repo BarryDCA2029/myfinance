@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.10.7';
+const APP_VERSION='1.10.8';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -261,8 +261,8 @@ function compactMoney(v){
 function moneyCalendar(){
   const [yy,mm]=calendarMonth.split('-').map(Number);
   const first=new Date(yy,mm-1,1), days=new Date(yy,mm,0).getDate();
-  const offset=(first.getDay()+6)%7; // จันทร์เป็นวันแรก
-  const labels=['จ','อ','พ','พฤ','ศ','ส','อา'];
+  const offset=first.getDay(); // อาทิตย์เป็นวันแรก
+  const labels=['อา','จ','อ','พ','พฤ','ศ','ส'];
   const monthTx=data.transactions.filter(x=>(x.date||'').startsWith(calendarMonth));
   const cells=[];
   for(let i=0;i<offset;i++)cells.push('<div class="cal-cell cal-empty"></div>');

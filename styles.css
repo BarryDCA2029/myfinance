@@ -243,3 +243,12 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .quick-add-fab{position:absolute;left:50%;top:-25px;transform:translateX(-50%);width:54px;height:54px;border-radius:50%;border:3px solid #fcfcfa;background:var(--v1107-navy);color:#fff;font-size:34px;font-weight:300;line-height:46px;text-align:center;box-shadow:0 7px 18px rgba(16,47,79,.22);z-index:22;padding:0;touch-action:manipulation}
 .quick-add-fab:active{transform:translateX(-50%) scale(.96)}
 @media(max-width:390px){.section-accent{height:3px!important}.bottom .nav{font-size:11px!important}.bottom .nav .ico{font-size:21px!important}.quick-add-fab{width:52px;height:52px;top:-24px;font-size:32px}}
+\n/* V1.10.8 Calendar weekend edge tint — Sunday first, Saturday last. */
+.cal-week span:first-child{background:#f8e8e9!important;color:#8b6267!important;border-radius:8px;padding:4px 0}
+.cal-week span:last-child{background:#eee9f5!important;color:#70647e!important;border-radius:8px;padding:4px 0}
+.cal-grid .cal-cell:nth-child(7n+1):not(.cal-empty){background:#fdf0f1!important}
+.cal-grid .cal-cell:nth-child(7n):not(.cal-empty){background:#f4f0f8!important}
+.cal-grid .cal-cell:nth-child(7n+1).has-tx{background:#fff4f4!important}
+.cal-grid .cal-cell:nth-child(7n).has-tx{background:#f7f3fa!important}
+.cal-grid .cal-cell:nth-child(7n+1).checked{background:#f6eeee!important}
+.cal-grid .cal-cell:nth-child(7n).checked{background:#f0edf4!important}
