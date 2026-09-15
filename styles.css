@@ -205,3 +205,24 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .section-accent i{width:65%;background:var(--v1105-red);clip-path:polygon(0 0,100% 0,97% 100%,0 100%)}
 .section-accent b{width:36%;margin-left:-1%;background:var(--v1105-navy);clip-path:polygon(3% 0,100% 0,100% 100%,0 100%)}
 @media(max-width:390px){.section-title{padding-top:0!important}.section-accent{height:5px;margin-top:16px}}
+\n\n/* MY FINANCE V1.10.6 — calm premium KPI + navy/silver section accents */
+:root{--v1106-navy:#102f4f;--v1106-silver:#66727c;--v1106-pearl:#fffdfa;--v1106-platinum:#eef0f1}
+/* KPI: one restrained private-wealth surface; semantic meaning stays in the values. */
+.grid4 .mini,
+.grid4 .mini.liquid,
+.grid4 .mini.income,
+.grid4 .mini.expense,
+.grid4 .mini.cashflow{
+  background:linear-gradient(145deg,var(--v1106-pearl) 0%,#f8f8f5 55%,var(--v1106-platinum) 100%)!important;
+  border:1px solid #cfd4d7!important;
+  box-shadow:0 7px 18px rgba(16,47,79,.065)!important;
+}
+.grid4 .mini .t{color:#66727c!important}
+.grid4 .mini.liquid .v{color:var(--v1106-navy)!important}
+.grid4 .mini.income .v{color:var(--sage)!important}
+.grid4 .mini.expense .v{color:var(--rose)!important}
+.grid4 .mini.cashflow .v{color:var(--blue)!important}
+/* Section signature: calm Deep Navy + Dark Silver Gray. */
+.section-accent{box-shadow:0 1px 0 rgba(16,47,79,.08)!important}
+.section-accent i{width:65%!important;background:var(--v1106-navy)!important}
+.section-accent b{width:36%!important;margin-left:-1%!important;background:var(--v1106-silver)!important}
