@@ -134,3 +134,44 @@ body{background:var(--v19-bg)!important}.card,.asset-card,.settings-list{border-
 .cal-grid{display:grid!important;grid-template-columns:repeat(7,minmax(0,1fr))!important;grid-auto-rows:64px!important;gap:4px!important}.cal-cell{height:64px!important;min-height:64px!important;max-height:64px!important;overflow:hidden!important;padding:5px 3px!important}.cal-cell i{max-width:100%;overflow:hidden;text-overflow:clip;white-space:nowrap;font-size:9px!important}.cal-day{font-size:11px!important}
 .bottom{grid-template-columns:repeat(4,1fr)!important}.bottom .nav{min-width:0}.bottom .nav .ico{font-size:19px}
 .premium-asset-ico,.asset-glyph,.bank-logo.asset-picture{background:#fffefa!important;border:1px solid #deded8!important;box-shadow:0 2px 7px rgba(16,47,79,.07)!important;border-radius:12px!important}
+
+/* MY FINANCE V1.10.2 — Private Wealth UI refinement */
+:root{
+  --v1102-warm:#f7f6f2;
+  --v1102-soft:#eef0f1;
+  --v1102-card:#fffefa;
+  --v1102-navy:#102f4f;
+  --v1102-navy2:#173f66;
+  --v1102-silver:#aeb7bd;
+  --v1102-silver-light:#dde2e5;
+  --v1102-line:#dfe3e4;
+  --v1102-muted:#707b82;
+}
+body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!important;color:#172431!important}
+.shell{background:transparent}
+.header{padding-bottom:10px;border-bottom:1px solid var(--v1102-silver-light)}
+.brand h1,.page-title,.section-title h2{color:var(--v1102-navy)!important}
+.brand p,.title-row small,.section-title span{color:var(--v1102-muted)!important}
+.month-btn{background:#fbfbf9!important;border:1px solid var(--v1102-silver-light)!important;color:var(--v1102-navy)!important;box-shadow:0 2px 8px rgba(16,47,79,.04)!important}
+.wealth-switch{background:#e9ecee!important;border-color:#d6dce0!important}
+.wealth-switch button{color:#66747e!important}.wealth-switch button.active{background:#fff!important;color:var(--v1102-navy)!important;box-shadow:0 2px 8px rgba(16,47,79,.10)!important}
+.card,.asset-card,.settings-list,.goal-card{background:var(--v1102-card)!important;border:1px solid var(--v1102-line)!important;box-shadow:0 4px 15px rgba(16,47,79,.045)!important}
+/* Signature divider: deep navy lead + brushed-silver continuation */
+.section-title{position:relative!important;padding-top:11px!important;border-top:1px solid var(--v1102-silver-light)!important}
+.section-title:before{content:"";position:absolute;top:-1px;left:0;width:54px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--v1102-navy) 0 68%,var(--v1102-silver) 68% 100%)}
+.section-title h2{font-weight:850!important;letter-spacing:.005em}
+.hero{background:linear-gradient(145deg,#0d2944 0%,var(--v1102-navy) 58%,#35536b 100%)!important;border:1px solid #8998a2!important;box-shadow:0 12px 28px rgba(16,47,79,.18)!important}
+.hero:before{background:linear-gradient(112deg,transparent 0 47%,rgba(221,226,229,.13) 48%,transparent 58%)!important}
+.bottom{background:rgba(252,252,250,.97)!important;border-top:1px solid var(--v1102-silver-light)!important;box-shadow:0 -5px 18px rgba(16,47,79,.05)!important}
+.bottom .nav{color:#78838a!important}.bottom .nav.active{color:var(--v1102-navy)!important}
+.premium-row,.tx-list .tx:not(.asset-row),.tx-list .asset-row{background:#fffefa!important;border-bottom-color:var(--v1102-line)!important}
+.premium-row:nth-child(even),.tx-list .asset-row:nth-child(even){background:#f3f5f4!important}
+.row-icon,.premium-asset-ico,.asset-glyph,.bank-logo.asset-picture,.kind-icon-fallback{border-color:var(--v1102-silver-light)!important;background:#fff!important}
+.calendar-card{background:#fffefa!important;border-color:var(--v1102-line)!important}.cal-week{color:#69757d!important}.cal-cell{border-color:#e1e5e6!important;background:#fff!important}.cal-cell:nth-child(7n+1),.cal-cell:nth-child(7n){background:#f3f5f5!important}
+.cal-head b{color:var(--v1102-navy)!important}.cal-nav{color:var(--v1102-navy)!important;border-color:var(--v1102-silver-light)!important;background:#fff!important}
+.settings-list,.setting{background:#fffefa!important}.setting{border-bottom-color:var(--v1102-line)!important}
+/* Hierarchical detail navigation: simple left-chevron treatment, not a bank UI copy */
+.sheet-nav-back{display:block;border:0;background:transparent;color:var(--v1102-navy);font:inherit;font-size:15px;font-weight:800;padding:3px 2px 10px;margin:0;text-align:left;min-height:34px}
+.sheet-nav-back:active{opacity:.55}.sheet>h3{margin-top:0;color:var(--v1102-navy)}
+.asset-back{color:var(--v1102-navy)!important;border-color:var(--v1102-silver-light)!important;background:#fff!important;font-weight:800!important;text-align:left!important}
+@media(max-width:390px){.section-title{padding-top:10px!important}.section-title:before{width:48px}.sheet-nav-back{font-size:14px}}
