@@ -175,3 +175,15 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .sheet-nav-back:active{opacity:.55}.sheet>h3{margin-top:0;color:var(--v1102-navy)}
 .asset-back{color:var(--v1102-navy)!important;border-color:var(--v1102-silver-light)!important;background:#fff!important;font-weight:800!important;text-align:left!important}
 @media(max-width:390px){.section-title{padding-top:10px!important}.section-title:before{width:48px}.sheet-nav-back{font-size:14px}}
+\n\n/* MY FINANCE V1.10.3 — Premium section accents + icon containers */
+:root{--v1103-red:#c91f36;--v1103-navy:#102f4f;--v1103-icon-bg:#f3f1eb;--v1103-icon-line:#c9cfd3}
+/* Strong, visible MY FINANCE signature divider: red lead + deep navy finish. */
+.section-title{padding-top:15px!important;border-top:0!important}
+.section-title:before{content:""!important;position:absolute!important;top:0!important;left:0!important;width:100%!important;height:5px!important;border-radius:4px 4px 1px 1px!important;background:linear-gradient(120deg,var(--v1103-red) 0 64%,var(--v1103-navy) 64.6% 100%)!important;box-shadow:0 1px 0 rgba(16,47,79,.10)!important}
+/* Soft ivory/silver icon containers keep white-background artwork visible without darkening cards. */
+.kind-icon{width:34px!important;height:34px!important;box-sizing:border-box!important;object-fit:contain!important;padding:4px!important;background:var(--v1103-icon-bg)!important;border:1px solid var(--v1103-icon-line)!important;border-radius:11px!important;box-shadow:0 2px 7px rgba(16,47,79,.08)!important;margin-right:7px!important}
+.a-label{display:flex!important;align-items:center!important;gap:2px!important}
+.asset-row .premium-asset-ico{width:48px!important;height:48px!important;min-width:48px!important;box-sizing:border-box!important;padding:3px!important;background:var(--v1103-icon-bg)!important;border:1px solid var(--v1103-icon-line)!important;border-radius:12px!important;box-shadow:0 2px 8px rgba(16,47,79,.08)!important}
+.asset-row .premium-asset-ico .bank-logo.asset-picture{width:40px!important;height:40px!important;object-fit:contain!important;border:0!important;border-radius:9px!important;box-shadow:none!important;background:#fff!important}
+.asset-grid .asset-card{overflow:hidden}
+@media(max-width:390px){.section-title{padding-top:14px!important}.section-title:before{height:4px!important}.kind-icon{width:32px!important;height:32px!important}}
