@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.10.8';
+const APP_VERSION='1.11';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -20,6 +20,7 @@ const defaultData={
   auditLog:[],
   verifiedEmptyDays:[],
   reminders:[],
+  planNotes:[],
   settings:{currency:'THB',hideZeroDebt:true,defaultExpenseAssetId:'',emergencyAssetIds:[],dashboardCards:['upcoming','calendar','pulse','spending','budget','projects','health','goals','recent'],projectOpening:{'ป่ายาง':{invested:40000,returned:11000,expense:0,cutoff:'2026-09-09',note:'รั้ว 30,000 + ปลูก/ดูแล 10,000 · เงินสนับสนุนปีแรก 6,400 + ปีสอง 4,600'}}}
 };
 
@@ -72,6 +73,7 @@ function migrate(raw){
   merged.auditLog=Array.isArray(raw.auditLog)?raw.auditLog:[];
   merged.verifiedEmptyDays=Array.isArray(raw.verifiedEmptyDays)?raw.verifiedEmptyDays:[];
   merged.reminders=Array.isArray(raw.reminders)?raw.reminders:[];
+  merged.planNotes=Array.isArray(raw.planNotes)?raw.planNotes:[];
   merged.assets=merged.assets.map(a=>({...a,note:String(a.note||'').slice(0,150)}));
   merged.settings={...defaultData.settings,...(raw.settings||{})};
   merged.settings.emergencyAssetIds=Array.isArray(merged.settings.emergencyAssetIds)?merged.settings.emergencyAssetIds:[];
@@ -80,7 +82,7 @@ function migrate(raw){
   Object.keys(merged.settings.projectOpening).forEach(k=>{const o=merged.settings.projectOpening[k]||{};merged.settings.projectOpening[k]={...o,expense:Number(o.expense||0),cutoff:o.cutoff||''};});
   // V1.7: rename only the legacy exact project label; keep Polar Farm 1/2 untouched.
   // V1.8.1: preserve old transactions but migrate legacy rent labels to the clearer house names.
-  merged.transactions=merged.transactions.map(t=>({...t,project:t.project==='Polar Farm'?'ป่ายูคา':t.project,category:t.category==='ค่าเช่า 1'?'ค่าเช่า 19/307':t.category==='ค่าเช่า 2'?'ค่าเช่า 19/308':t.category}));
+  merged.transactions=merged.transactions.map(t=>({...t,createdAt:Number(t.createdAt)||0,project:t.project==='Polar Farm'?'ป่ายูคา':t.project,category:t.category==='ค่าเช่า 1'?'ค่าเช่า 19/307':t.category==='ค่าเช่า 2'?'ค่าเช่า 19/308':t.category}));
   Object.keys(merged.projectBudgets).forEach(k=>{const b=merged.projectBudgets[k];if(b&&b['Polar Farm']!=null&&b['ป่ายูคา']==null){b['ป่ายูคา']=b['Polar Farm'];delete b['Polar Farm'];}});
   merged.version=APP_VERSION;
   return merged;
@@ -225,8 +227,8 @@ function dashboard(){
   const pulse=enabled.has('pulse')?financialPulse():'';
   // Stable dashboard order: snapshot first, then tasks/calendar, then analysis.
   // Low-priority planning cards stay after Recent Transactions.
-  const mainRest=order.filter(k=>!['upcoming','calendar','pulse','recent','budget','health','goals'].includes(k)&&map[k]).map(k=>map[k]()).join('');
-  const tail=(enabled.has('recent')?recentTx():'')+(enabled.has('budget')?budgetSummary():'')+(enabled.has('health')?healthCard():'')+(enabled.has('goals')?goalsSummary():'');
+  const mainRest=order.filter(k=>!['upcoming','calendar','pulse','recent','projects','budget','health','goals'].includes(k)&&map[k]).map(k=>map[k]()).join('');
+  const tail=(enabled.has('recent')?recentTx():'')+(enabled.has('projects')?projectDashboard():'')+(enabled.has('budget')?budgetSummary():'')+(enabled.has('health')?healthCard():'')+(enabled.has('goals')?goalsSummary():'');
   const kpis=`<div class="grid4"><button class="mini liquid kpi-card" data-kpi="liquid"><div class="t">◉ เงินพร้อมใช้</div><div class="v">${THB(t.liquidMoney)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini income kpi-card" data-kpi="income"><div class="t">↑ รายรับ</div><div class="v">${THB(t.income)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini expense kpi-card" data-kpi="expense"><div class="t">↓ รายจ่าย</div><div class="v">${THB(t.expense)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini cashflow kpi-card" data-kpi="cashflow"><div class="t">↕ Cash Flow</div><div class="v">${THB(t.cashflow)}</div><small>แตะเพื่อดูรายละเอียด</small></button></div>`;
   let body=`<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section>${kpis}${upcoming}${calendar}${pulse}${mainRest}${tail}`;
   // Real markup accent bar: avoids fragile pseudo-element rendering/caching on iOS PWA.
@@ -265,7 +267,7 @@ function moneyCalendar(){
   const labels=['อา','จ','อ','พ','พฤ','ศ','ส'];
   const monthTx=data.transactions.filter(x=>(x.date||'').startsWith(calendarMonth));
   const cells=[];
-  for(let i=0;i<offset;i++)cells.push('<div class="cal-cell cal-empty"></div>');
+  for(let i=0;i<offset;i++){const wc=i===0?' cal-sun':i===6?' cal-sat':'';cells.push(`<div class="cal-cell cal-empty${wc}"></div>`);}
   for(let d=1;d<=days;d++){
     const date=`${calendarMonth}-${String(d).padStart(2,'0')}`;
     const tx=monthTx.filter(x=>x.date===date);
@@ -275,7 +277,8 @@ function moneyCalendar(){
     const hasReminder=(data.reminders||[]).some(r=>!r.done&&(r.date===date||(r.repeat==='monthly'&&Number(r.dayStart)===d)));
     const todayClass=date===today()?' today':'';
     const active=tx.length?' has-tx':checked?' checked':'';
-    cells.push(`<button class="cal-cell${todayClass}${active}" data-cal-date="${date}"><span class="cal-day">${d}</span>${inc?`<i class="cal-in">+${compactMoney(inc)}</i>`:''}${exp>0?`<i class="cal-out">-${compactMoney(exp)}</i>`:exp<0?`<i class="cal-in">+${compactMoney(Math.abs(exp))}</i>`:''}${hasReminder?'<i class="cal-rem">•</i>':''}${!tx.length&&checked?'<i class="cal-ok">✓</i>':''}</button>`);
+    const dow=new Date(yy,mm-1,d).getDay(); const weekendClass=dow===0?' cal-sun':dow===6?' cal-sat':'';
+    cells.push(`<button class="cal-cell${weekendClass}${todayClass}${active}" data-cal-date="${date}"><span class="cal-day">${d}</span>${inc?`<i class="cal-in">+${compactMoney(inc)}</i>`:''}${exp>0?`<i class="cal-out">-${compactMoney(exp)}</i>`:exp<0?`<i class="cal-in">+${compactMoney(Math.abs(exp))}</i>`:''}${hasReminder?'<i class="cal-rem">•</i>':''}${!tx.length&&checked?'<i class="cal-ok">✓</i>':''}</button>`);
   }
   const label=new Date(yy,mm-1,1).toLocaleDateString('th-TH',{month:'long',year:'numeric'});
   return `<section class="section"><div class="section-title"><h2>Money Calendar</h2><span>แตะวันเพื่อดู/เพิ่มรายการ</span></div><div class="card calendar-card"><div class="cal-head"><button class="cal-nav" id="calPrev" aria-label="เดือนก่อน">‹</button><b>${label}</b><button class="cal-nav" id="calNext" aria-label="เดือนถัดไป">›</button></div><div class="cal-week">${labels.map(x=>`<span>${x}</span>`).join('')}</div><div class="cal-grid">${cells.join('')}</div><div class="cal-legend"><span><i class="legend-dot in"></i>รับ</span><span><i class="legend-dot out"></i>จ่ายสุทธิ</span><span>✓ ตรวจแล้วไม่มีรายการ</span></div></div></section>`;
@@ -388,14 +391,16 @@ function txBalanceLine(x){
   const bb=Number.isFinite(b.source)?`คงเหลือ ${THB(b.source)}`:'';
   return `<span>${esc(a)}</span>${bb?`<span>${bb}</span>`:''}`;
 }
-function recentTx(){const tx=[...data.transactions].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);return `<section class="section"><div class="section-title"><h2>Recent Transactions</h2><span id="seeAll">ดูทั้งหมด</span></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">เริ่มบันทึกรายการแรกด้วยปุ่ม +</div>'}</div></section>`}
+function txCreatedSort(a,b){const ac=Number(a.createdAt||0),bc=Number(b.createdAt||0);if(ac&&bc)return bc-ac;if(ac!==bc)return bc-ac;return 0}
+function recentTx(){const tx=[...data.transactions].map((t,i)=>({...t,__legacyIndex:i})).sort((a,b)=>txCreatedSort(a,b)||(b.__legacyIndex-a.__legacyIndex)).slice(0,5);return `<section class="section"><div class="section-title"><h2>Recent Transactions</h2><span id="seeAll">ดูทั้งหมด</span></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">เริ่มบันทึกรายการแรกด้วยปุ่ม +</div>'}</div></section>`}
 function txRow(x){
   const sign=x.type==='income'?'+':x.type==='expense'?'-':x.type==='reimbursement'?'+':'';
   const cls=(x.type==='income'||x.type==='reimbursement')?'pos':x.type==='expense'?'neg':'';
   const date=esc(x.date||'');
-  return `<button class="tx tx-button tx-${esc(x.type||'other')}" data-id="${x.id}" aria-label="เปิดรายการ"><div class="tx-ico">${iconFor(x.category)}</div><div class="tx-main"><small class="tx-date">${date}</small><b>${esc(x.category||typeLabel(x.type))}</b><div class="tx-account">${txBalanceLine(x)}</div>${x.project&&x.project!=='ส่วนตัว/ทั่วไป'?`<small class="tx-project">${esc(x.project)}</small>`:''}</div><div class="tx-money"><div class="amt ${cls}">${sign}${THB(x.amount)}</div><small>${esc(typeLabel(x.type))}</small></div></button>`
+  const saved=x.createdAt?new Date(Number(x.createdAt)).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}):'';
+  return `<button class="tx tx-button tx-${esc(x.type||'other')}" data-id="${x.id}" aria-label="เปิดรายการ"><div class="tx-ico">${iconFor(x.category)}</div><div class="tx-main"><small class="tx-date">${date}${saved?` · บันทึก ${saved}`:''}</small><b>${esc(x.category||typeLabel(x.type))}</b><div class="tx-account">${txBalanceLine(x)}</div>${x.project&&x.project!=='ส่วนตัว/ทั่วไป'?`<small class="tx-project">${esc(x.project)}</small>`:''}</div><div class="tx-money"><div class="amt ${cls}">${sign}${THB(x.amount)}</div><small>${esc(typeLabel(x.type))}</small></div></button>`
 }
-function transactions(){let tx=[...data.transactions].sort((a,b)=>(b.date||'').localeCompare(a.date||''));if(txFilter!=='all')tx=tx.filter(x=>x.type===txFilter);return `${header('Transactions','รายรับ รายจ่าย โอน และลงทุน')}<div class="title-row"><h2 class="page-title">รายการทั้งหมด</h2><small>แตะรายการเพื่อแก้ไข/ลบ</small></div><div class="filters"><button class="chip ${txFilter==='all'?'active':''}" data-filter="all">ทั้งหมด</button><button class="chip ${txFilter==='income'?'active':''}" data-filter="income">รายรับ</button><button class="chip ${txFilter==='expense'?'active':''}" data-filter="expense">รายจ่าย</button><button class="chip ${txFilter==='reimbursement'?'active':''}" data-filter="reimbursement">คืนค่าใช้จ่าย</button><button class="chip ${txFilter==='transfer'?'active':''}" data-filter="transfer">โอน</button><button class="chip ${txFilter==='investment'?'active':''}" data-filter="investment">ลงทุน</button></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'}</div><small class="ledger-note">ยอดคงเหลือย้อนหลังคำนวณจากรายการที่ผูกบัญชีและประวัติ Reconcile</small>`}
+function transactions(){let tx=[...data.transactions].map((t,i)=>({...t,__legacyIndex:i})).sort((a,b)=>txCreatedSort(a,b)||(b.__legacyIndex-a.__legacyIndex));if(txFilter!=='all')tx=tx.filter(x=>x.type===txFilter);return `${header('Transactions','รายรับ รายจ่าย โอน และลงทุน')}<div class="title-row"><h2 class="page-title">รายการทั้งหมด</h2><small>แตะรายการเพื่อแก้ไข/ลบ</small></div><div class="filters"><button class="chip ${txFilter==='all'?'active':''}" data-filter="all">ทั้งหมด</button><button class="chip ${txFilter==='income'?'active':''}" data-filter="income">รายรับ</button><button class="chip ${txFilter==='expense'?'active':''}" data-filter="expense">รายจ่าย</button><button class="chip ${txFilter==='reimbursement'?'active':''}" data-filter="reimbursement">คืนค่าใช้จ่าย</button><button class="chip ${txFilter==='transfer'?'active':''}" data-filter="transfer">โอน</button><button class="chip ${txFilter==='investment'?'active':''}" data-filter="investment">ลงทุน</button></div><div class="card tx-list">${tx.length?tx.map(txRow).join(''):'<div class="empty">ยังไม่มีรายการในหมวดนี้</div>'}</div><small class="ledger-note">ยอดคงเหลือย้อนหลังคำนวณจากรายการที่ผูกบัญชีและประวัติ Reconcile</small>`}
 function investmentSummary(){
   const list=data.assets.filter(a=>a.kind==='stock');
   const cost=list.reduce((s,a)=>s+Number(a.cost??a.value??0),0);
@@ -457,7 +462,12 @@ function assets(){
 function plan(){
   const budgets=currentBudgetMap(); const sums=monthlyExpenseByCategory();
   const budgetRows=expenseCats.map(cat=>{const b=Number(budgets[cat]||0);const a=Number(sums[cat]||0);const p=b?Math.round(a/b*100):(a>0?999:0);return `<div class="budget-row"><div class="budget-head"><div><b>${esc(cat)}</b><small>ใช้จริง ${THB(a)}</small></div><button class="budget-edit" data-budget-cat="${esc(cat)}">${b?THB(b):'ตั้งวงเงิน'}</button></div>${b?`<div class="bar budget ${p>100?'over':p>=80?'warn':''}"><i style="width:${Math.min(100,p)}%"></i></div><small class="budget-note">${p>100?`ใช้แล้ว ${THB(a)} (${p}%) · เกินวงเงิน ${THB(a-b)}`:`ใช้แล้ว ${THB(a)} (${p}%) · เหลือ ${THB(b-a)} (${Math.max(0,100-p)}%)`}</small>`:''}</div>`}).join('');
-  return `${header('Plan','Budget & Goals')}<div class="title-row"><h2 class="page-title">Financial Goals</h2><button class="mini-add" id="addGoal">+ เพิ่ม</button></div><div class="goal-cards">${data.goals.length?data.goals.map(g=>{const p=Math.min(100,Math.round(effectiveGoalCurrent(g)/(Number(g.target)||1)*100));return `<button class="card goal-card" data-goal-id="${g.id}"><div><div class="label goal-label">${esc(g.name)}</div><div class="goal-value">${THB(effectiveGoalCurrent(g))}</div><small>เป้าหมาย ${THB(g.target)} · ${p}%</small><div class="bar"><i style="width:${p}%"></i></div></div><span>›</span></button>`}).join(''):'<div class="card empty">ยังไม่มีเป้าหมาย</div>'}</div>${emergencyFundPlan()}${projectPlan()}<div class="notice plan-notice"><b>วงเงินวางแผน ≠ เงินที่ถูกหัก</b><br>ใส่เป็นตัวเลขเพดานเท่านั้น เงินยังอยู่ในบัญชีเดิม จนกว่าจะบันทึกรายจ่ายจริง</div><section class="section"><div class="section-title"><h2>วงเงินวางแผนตามหมวด</h2><span>${new Date().toLocaleDateString('th-TH',{month:'long'})}</span></div><div class="card budget-list">${budgetRows}</div></section>`
+  return `${header('Plan','Budget & Goals')}<div class="title-row"><h2 class="page-title">Financial Goals</h2><button class="mini-add" id="addGoal">+ เพิ่ม</button></div><div class="goal-cards">${data.goals.length?data.goals.map(g=>{const p=Math.min(100,Math.round(effectiveGoalCurrent(g)/(Number(g.target)||1)*100));return `<button class="card goal-card" data-goal-id="${g.id}"><div><div class="label goal-label">${esc(g.name)}</div><div class="goal-value">${THB(effectiveGoalCurrent(g))}</div><small>เป้าหมาย ${THB(g.target)} · ${p}%</small><div class="bar"><i style="width:${p}%"></i></div></div><span>›</span></button>`}).join(''):'<div class="card empty">ยังไม่มีเป้าหมาย</div>'}</div>${emergencyFundPlan()}${planNotesSection()}${projectPlan()}<div class="notice plan-notice"><b>วงเงินวางแผน ≠ เงินที่ถูกหัก</b><br>ใส่เป็นตัวเลขเพดานเท่านั้น เงินยังอยู่ในบัญชีเดิม จนกว่าจะบันทึกรายจ่ายจริง</div><section class="section"><div class="section-title"><h2>วงเงินวางแผนตามหมวด</h2><span>${new Date().toLocaleDateString('th-TH',{month:'long'})}</span></div><div class="card budget-list">${budgetRows}</div></section>`
+}
+function planNotesSection(){
+  const active=(data.planNotes||[]).filter(n=>!n.done).sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+  const done=(data.planNotes||[]).filter(n=>n.done).sort((a,b)=>Number(b.doneAt||0)-Number(a.doneAt||0));
+  return `<section class="section"><div class="section-title"><h2>Notes & To-Do</h2><span><button class="text-add" id="planNoteHistory">History${done.length?` (${done.length})`:''}</button> <button class="text-add" id="addPlanNote">+ เพิ่มบันทึก</button></span></div><div class="card premium-list">${active.length?active.map(n=>`<button class="premium-row" data-plan-note-id="${n.id}"><div class="row-icon">□</div><div class="row-main"><b>${esc(n.title)}</b><small>${esc(n.text||'').slice(0,90)}${(n.text||'').length>90?'…':''}</small></div><div class="row-right">›</div></button>`).join(''):'<div class="empty compact">ยังไม่มีบันทึก · ใช้จดเรื่องที่ต้องทำหรือรายละเอียดสั้น ๆ</div>'}</div></section>`;
 }
 function emergencyFundPlan(){
   const ids=data.settings?.emergencyAssetIds||[];
@@ -505,6 +515,8 @@ function sheet(){
   if(modal==='calendarDay')return calendarDaySheet();
   if(modal==='reminder'||modal==='editReminder')return reminderSheet();
   if(modal==='reminderHistory')return reminderHistorySheet();
+  if(modal==='planNote'||modal==='editPlanNote')return planNoteSheet();
+  if(modal==='planNoteHistory')return planNoteHistorySheet();
   if(modal==='dashboardCustomize')return dashboardCustomizeSheet();
   if(modal==='kpiDetail')return kpiDetailSheet();
   return '';
@@ -565,6 +577,14 @@ function reconcileSheet(){
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>Reconcile · ${esc(a.name)}</h3><p class="field-hint">ใส่ยอดที่มีอยู่จริงตอนนี้ ระบบจะปรับ Asset โดยไม่สร้างรายรับ/รายจ่ายปลอม และเก็บบันทึกส่วนต่างไว้</p><form id="reconcileForm"><div class="field"><label>ยอดในแอป</label><input value="${num(a.value)}" disabled></div><div class="field"><label>ยอดจริงตอนนี้</label><input id="actualBalance" class="money-input" type="text" inputmode="decimal" required></div><div class="field"><label>หมายเหตุ</label><input id="reconcileNote" value="ตรวจยอดตามเงินจริง"></div><button class="primary">ปรับยอด</button></form></div></div>`
 }
 
+function planNoteSheet(){
+  const editing=modal==='editPlanNote', n=editing?(data.planNotes||[]).find(x=>x.id===editId):null;
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>${editing?'แก้ไข':'เพิ่ม'} Notes & To-Do</h3><form id="planNoteForm"><div class="field"><label>หัวข้อ</label><input id="planNoteTitle" maxlength="80" value="${esc(n?.title||'')}" placeholder="เช่น ทำเบิก พตส. / เบิกค่ารักษา" required></div><div class="field"><label>รายละเอียด</label><textarea id="planNoteText" maxlength="300" rows="5" placeholder="รายละเอียดสั้น ๆ สูงสุด 300 ตัวอักษร · ไม่เก็บ PIN / OTP / CVV / รหัสผ่าน">${esc(n?.text||'')}</textarea><small class="field-hint"><span id="planNoteCount">${(n?.text||'').length}</span>/300</small></div><button class="primary">บันทึก</button>${editing?`<button type="button" class="secondary" id="donePlanNote">${n?.done?'เปิดงานอีกครั้ง':'✓ เสร็จแล้ว'}</button><button type="button" class="danger" id="deletePlanNote">ลบบันทึกนี้</button>`:''}</form></div></div>`;
+}
+function planNoteHistorySheet(){
+  const list=(data.planNotes||[]).filter(n=>n.done).sort((a,b)=>Number(b.doneAt||0)-Number(a.doneAt||0));
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>Notes & To-Do · History</h3><div class="card premium-list">${list.length?list.map(n=>`<button class="premium-row" data-plan-note-id="${n.id}"><div class="row-icon">✓</div><div class="row-main"><b>${esc(n.title)}</b><small>${n.doneAt?new Date(Number(n.doneAt)).toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}):''}</small></div><div class="row-right">History <span>›</span></div></button>`).join(''):'<div class="empty compact">ยังไม่มีบันทึกที่เสร็จแล้ว</div>'}</div></div></div>`;
+}
 function reminderHistorySheet(){
  const list=(data.reminders||[]).filter(r=>r.done).sort((a,b)=>String(b.doneAt||'').localeCompare(String(a.doneAt||'')));
  return `<div class="sheet-back" id="sheetBack"><div class="sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>‹ Recurring & Upcoming · History</h3><div class="card premium-list">${list.length?list.map(r=>`<button class="premium-row" data-reminder-id="${r.id}"><div class="row-icon">✓</div><div class="row-main"><b>${esc(r.title)}</b><small>ทำแล้ว ${r.doneAt?new Date(r.doneAt+'T12:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'}):''}</small></div><div class="row-right">History <span>›</span></div></button>`).join(''):'<div class="empty compact">ยังไม่มีประวัติรายการที่ทำแล้ว</div>'}</div></div></div>`;
@@ -610,6 +630,10 @@ function bind(){
   $('#quickAdd')?.addEventListener('click',()=>{txDraftDate='';txDraftType='expense';modal='tx';editId=null;render()});
   $('#reminderHistory')?.addEventListener('click',()=>{modal='reminderHistory';render()});
   $('#addReminder')?.addEventListener('click',()=>{modal='reminder';editId=null;render()});
+  $('#addPlanNote')?.addEventListener('click',()=>{modal='planNote';editId=null;render()});
+  $('#planNoteHistory')?.addEventListener('click',()=>{modal='planNoteHistory';editId=null;render()});
+  $$('[data-plan-note-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.planNoteId;modal='editPlanNote';render()}));
+  $('#planNoteText')?.addEventListener('input',e=>{const c=$('#planNoteCount');if(c)c.textContent=e.target.value.length});
   $$('[data-reminder-id]').forEach(b=>b.addEventListener('click',()=>{editId=b.dataset.reminderId;modal='editReminder';render()}));
   $('#customizeDashboard')?.addEventListener('click',()=>{modal='dashboardCustomize';render()});
   $('#closeCustomize')?.addEventListener('click',()=>{modal=null;render()});
@@ -644,7 +668,8 @@ function bind(){
     const sourceAssetId=$('#sourceAsset')?.value||'';
     const sourceAsset=sourceAssetId?findAsset(sourceAssetId):null;
     const destinationAssetId=$('#destinationAsset')?.value||''; const destinationAsset=destinationAssetId?findAsset(destinationAssetId):null;
-    const row={id:editId||uid(),type:$('#txType').value,amount:parseMoney($('#amount').value),category:$('#category')?.value||'โอนเงิน',account:sourceAsset?.name||'',sourceAssetId,destinationAssetId,destinationAccount:destinationAsset?.name||'',project:$('#project')?.value||'ส่วนตัว/ทั่วไป',date:$('#date').value,note:$('#note').value.trim()};
+    const oldTx=editId?data.transactions.find(x=>x.id===editId):null;
+    const row={id:editId||uid(),createdAt:oldTx?.createdAt||Date.now(),type:$('#txType').value,amount:parseMoney($('#amount').value),category:$('#category')?.value||'โอนเงิน',account:sourceAsset?.name||'',sourceAssetId,destinationAssetId,destinationAccount:destinationAsset?.name||'',project:$('#project')?.value||'ส่วนตัว/ทั่วไป',date:$('#date').value,note:$('#note').value.trim()};
     if(!row.amount||row.amount<0)return alert('กรุณาใส่จำนวนเงินมากกว่า 0');
     if(row.type==='transfer'&&(!sourceAssetId||!destinationAssetId||sourceAssetId===destinationAssetId)){alert('กรุณาเลือกบัญชีต้นทางและปลายทางคนละบัญชี');return}
     if((row.type==='expense'||row.type==='income'||row.type==='reimbursement')&&!sourceAssetId){if(!confirm('ยังไม่ได้เลือกแหล่งเงิน/บัญชี รายการนี้จะไม่ปรับยอด Assets อัตโนมัติ ต้องการบันทึกต่อหรือไม่?'))return}
@@ -685,6 +710,9 @@ function bind(){
   $('#projectDetailForm')?.addEventListener('submit',e=>{e.preventDefault();const invested=parseMoney($('#projectOpeningInvested').value),returned=parseMoney($('#projectOpeningReturned').value),expense=parseMoney($('#projectOpeningExpense').value),cutoff=$('#projectOpeningCutoff').value||'',note=$('#projectOpeningNote').value.trim();if(![invested,returned,expense].every(Number.isFinite)||invested<0||returned<0||expense<0)return alert('กรุณาใส่จำนวนเงินที่ถูกต้อง');data.settings.projectOpening=data.settings.projectOpening&&typeof data.settings.projectOpening==='object'?data.settings.projectOpening:{};data.settings.projectOpening[editId]={invested,returned,expense,cutoff,note};audit('แก้ไขยอดย้อนหลัง Project',`${editId}: ลงทุน ${THB(invested)} · รายรับ ${THB(returned)} · ค่าใช้จ่าย ${THB(expense)}`);save();modal=null;editId=null;render()});
   $('#clearProjectOpening')?.addEventListener('click',()=>{if(confirm('ล้างเฉพาะยอดตั้งต้นของ Project นี้ใช่หรือไม่? รายการรายรับ/รายจ่ายที่บันทึกไว้จะไม่ถูกลบ')){if(data.settings?.projectOpening)delete data.settings.projectOpening[editId];audit('ล้างยอดย้อนหลัง Project',editId);save();modal=null;editId=null;render()}});
 
+  $('#planNoteForm')?.addEventListener('submit',e=>{e.preventDefault();const old=(data.planNotes||[]).find(x=>x.id===editId);const row={id:editId||uid(),title:$('#planNoteTitle').value.trim().slice(0,80),text:$('#planNoteText').value.trim().slice(0,300),createdAt:old?.createdAt||Date.now(),done:!!old?.done,doneAt:old?.doneAt||0};if(!row.title)return alert('กรุณาใส่หัวข้อ');data.planNotes=Array.isArray(data.planNotes)?data.planNotes:[];if(modal==='editPlanNote'){const i=data.planNotes.findIndex(x=>x.id===editId);if(i>=0)data.planNotes[i]=row}else data.planNotes.push(row);save();modal=null;editId=null;render()});
+  $('#donePlanNote')?.addEventListener('click',()=>{const n=(data.planNotes||[]).find(x=>x.id===editId);if(n){n.done=!n.done;n.doneAt=n.done?Date.now():0;save()}modal=null;editId=null;render()});
+  $('#deletePlanNote')?.addEventListener('click',()=>{if(confirm('ลบบันทึกนี้ใช่หรือไม่?')){data.planNotes=(data.planNotes||[]).filter(x=>x.id!==editId);save();modal=null;editId=null;render()}});
   $('#reminderForm')?.addEventListener('submit',e=>{e.preventDefault();const repeat=$('#remRepeat').value;const row={id:editId||uid(),title:$('#remTitle').value.trim(),type:$('#remType').value,repeat,date:repeat==='once'?$('#remDate').value:'',dayStart:repeat==='monthly'?Number($('#remDayStart').value||0):0,dayEnd:repeat==='monthly'?Number($('#remDayEnd').value||0):0,location:$('#remLocation').value.trim(),note:$('#remNote').value.trim(),done:modal==='editReminder'?!!(data.reminders.find(x=>x.id===editId)?.done):false,doneAt:modal==='editReminder'?(data.reminders.find(x=>x.id===editId)?.doneAt||''):''};if(!row.title)return alert('กรุณาใส่เรื่อง');if(repeat==='monthly'&&(row.dayStart<1||row.dayStart>31))return alert('กรุณาใส่วันเริ่ม 1–31');if(modal==='editReminder'){const i=data.reminders.findIndex(x=>x.id===editId);if(i>=0)data.reminders[i]=row}else data.reminders.push(row);save();modal=null;editId=null;render()});
   $('#doneReminder')?.addEventListener('click',()=>{const r=data.reminders.find(x=>x.id===editId);if(r){r.done=!r.done;r.doneAt=r.done?today():'';save()}modal=null;editId=null;render()});
   $('#deleteReminder')?.addEventListener('click',()=>{if(confirm('ลบรายการเตือนนี้ใช่หรือไม่?')){data.reminders=data.reminders.filter(x=>x.id!==editId);save();modal=null;editId=null;render()}});

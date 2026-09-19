@@ -252,3 +252,16 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .cal-grid .cal-cell:nth-child(7n).has-tx{background:#f7f3fa!important}
 .cal-grid .cal-cell:nth-child(7n+1).checked{background:#f6eeee!important}
 .cal-grid .cal-cell:nth-child(7n).checked{background:#f0edf4!important}
+
+
+/* V1.11 Calendar weekend correction: explicit classes, including leading empty Sunday cells. */
+.cal-week span:first-child{background:#f8e8e9!important;color:#8b6267!important;border-radius:8px;padding:4px 0}
+.cal-week span:last-child{background:#eee9f5!important;color:#70647e!important;border-radius:8px;padding:4px 0}
+.cal-grid .cal-cell.cal-sun{background:#fdf0f1!important}
+.cal-grid .cal-cell.cal-sat{background:#f4f0f8!important}
+.cal-grid .cal-cell.cal-sun.has-tx{background:#fff4f4!important}
+.cal-grid .cal-cell.cal-sat.has-tx{background:#f7f3fa!important}
+.cal-grid .cal-cell.cal-sun.checked{background:#f6eeee!important}
+.cal-grid .cal-cell.cal-sat.checked{background:#f0edf4!important}
+.cal-grid .cal-cell.cal-empty.cal-sun{background:#fdf0f1!important;border-color:transparent!important}
+.cal-grid .cal-cell.cal-empty.cal-sat{background:#f4f0f8!important;border-color:transparent!important}
