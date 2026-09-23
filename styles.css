@@ -265,3 +265,13 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .cal-grid .cal-cell.cal-sat.checked{background:#f0edf4!important}
 .cal-grid .cal-cell.cal-empty.cal-sun{background:#fdf0f1!important;border-color:transparent!important}
 .cal-grid .cal-cell.cal-empty.cal-sat{background:#f4f0f8!important;border-color:transparent!important}
+
+
+/* V1.12 Asset History & Money Trail */
+.asset-history{margin-top:18px;padding-top:14px;border-top:1px solid rgba(60,68,75,.14)}
+.asset-history-title{margin-bottom:3px}.asset-history-title h2{font-size:16px;margin:0}
+.asset-history-list{margin-top:10px;border:1px solid rgba(60,68,75,.10);border-radius:16px;overflow:hidden;background:#fff}
+.asset-history-row{display:flex;gap:10px;align-items:flex-start;padding:11px 10px;border-bottom:1px solid rgba(60,68,75,.08)}
+.asset-history-row:last-child{border-bottom:0}.asset-history-dot{width:28px;height:28px;border-radius:9px;background:#f1f2ef;display:grid;place-items:center;flex:0 0 28px;font-weight:700}
+.asset-history-main{min-width:0;flex:1}.asset-history-main b,.asset-history-main small,.asset-history-main em{display:block}.asset-history-main b{font-size:13px}.asset-history-main small{font-size:12px;margin-top:2px;line-height:1.35}.asset-history-main em{font-size:10px;opacity:.58;margin-top:4px;font-style:normal}
+.asset-note-edit{border:0;background:transparent;font-size:11px;text-decoration:underline;opacity:.7;padding:4px}.secure-note{margin-top:10px}
