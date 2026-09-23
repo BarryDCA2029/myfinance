@@ -1,5 +1,5 @@
-const CACHE='my-finance-v1.12';
-const ASSETS=['./','./index.html','./styles.css?v=1.12','./app.js?v=1.12','./manifest.webmanifest','./icon-192.png','./icon-512.png','./bofa.png','./scb.png','./ktb.png','./kbank.png','./gsb.png','./ttb.png','./bbl.png','./honda.png','./mitsubishi.png','./gpf.png','./gold.png','./land.png','./house.png','./vehicle.png','./other.png','./wallet.png','./fund.png'];
+const CACHE='my-finance-v1.13';
+const ASSETS=['./','./index.html','./styles.css?v=1.13','./app.js?v=1.13','./manifest.webmanifest','./icon-192.png','./icon-512.png','./bofa.png','./scb.png','./ktb.png','./kbank.png','./gsb.png','./ttb.png','./bbl.png','./honda.png','./mitsubishi.png','./gpf.png','./gold.png','./land.png','./house.png','./vehicle.png','./other.png','./wallet.png','./fund.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
