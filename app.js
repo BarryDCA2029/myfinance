@@ -1,9 +1,9 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.2';
+const APP_VERSION='1.3';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
-const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
+const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','เบิกค่าเช่าบ้าน','เบิก พ.ต.ส.','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
 const defaultData={
   version:APP_VERSION,
   pin:null,
@@ -157,7 +157,7 @@ function applyTxAssetEffect(tx){
   else if(tx?.type==='investment'){if(src)src.value=round2(Number(src.value||0)-amt);if(dst){dst.cost=round2(Number(dst.cost||0)+amt);dst.value=round2(Number(dst.value||0)+amt);}}
 }
 function round2(n){return Math.round((Number(n||0)+Number.EPSILON)*100)/100}
-function iconFor(cat){const m={'อาหาร':'🍜','เดินทาง':'🚗','ครอบครัว':'👨‍👩‍👧','สุขภาพ':'🩺','การศึกษา':'📚','ท่องเที่ยว':'✈️','ภาษี':'🧾','ของใช้ส่วนตัว':'🧴','ค่าสาธารณูปโภค':'💡','ค่าซ่อม/บำรุง':'🛠️','ค่าแรง':'👷','วัสดุ/อุปกรณ์':'🧰','ปุ๋ย/ต้นไม้':'🌱','อาหารสัตว์':'🌾','เงินเดือน':'💼','ปันผล':'💹','ดอกเบี้ย':'🏦','รายได้พิเศษ':'✨','รายรับพิเศษ/เงินสนับสนุน':'✦','เงินเดือนรอบ 1':'💼','เงินเดือนรอบ 2':'💼','ค่าเช่า 1':'🏠','ค่าเช่า 2':'🏠','ค่าเช่า 19/307':'🏠','ค่าเช่า 19/308':'🏠','ผลผลิตใช้เอง':'◇','ค่าเช่า':'🏠','ขายทรัพย์สิน':'🏷️','ลงทุน':'📈','โอนเงิน':'🔄','อื่น ๆ':'•'};return m[cat]||'•'}
+function iconFor(cat){const m={'อาหาร':'🍜','เดินทาง':'🚗','ครอบครัว':'👨‍👩‍👧','สุขภาพ':'🩺','การศึกษา':'📚','ท่องเที่ยว':'✈️','ภาษี':'🧾','ของใช้ส่วนตัว':'🧴','ค่าสาธารณูปโภค':'💡','ค่าซ่อม/บำรุง':'🛠️','ค่าแรง':'👷','วัสดุ/อุปกรณ์':'🧰','ปุ๋ย/ต้นไม้':'🌱','อาหารสัตว์':'🌾','เงินเดือน':'💼','ปันผล':'💹','ดอกเบี้ย':'🏦','รายได้พิเศษ':'✨','รายรับพิเศษ/เงินสนับสนุน':'✦','เงินเดือนรอบ 1':'💼','เงินเดือนรอบ 2':'💼','ค่าเช่า 1':'🏠','ค่าเช่า 2':'🏠','ค่าเช่า 19/307':'🏠','ค่าเช่า 19/308':'🏠','เบิกค่าเช่าบ้าน':'🏠','เบิก พ.ต.ส.':'✦','ผลผลิตใช้เอง':'◇','ค่าเช่า':'🏠','ขายทรัพย์สิน':'🏷️','ลงทุน':'📈','โอนเงิน':'🔄','อื่น ๆ':'•'};return m[cat]||'•'}
 function audit(action,detail=''){data.auditLog=Array.isArray(data.auditLog)?data.auditLog:[];data.auditLog.push({id:uid(),at:new Date().toISOString(),action,detail});data.auditLog=data.auditLog.slice(-500)}
 function liquidityLabel(v){return ({ready:'พร้อมใช้',limited:'มีข้อจำกัด',low:'สภาพคล่องต่ำ'})[v]||'พร้อมใช้'}
 function assetKindLabel(k){return ({cash:'เงินสด/ธนาคาร',stock:'หุ้น/กองทุน',gold:'ทอง',property:'ที่ดิน/อสังหาฯ',vehicle:'รถ/ยานพาหนะ',other:'ทรัพย์สินอื่น',debt:'หนี้สิน'})[k]||k}
@@ -213,7 +213,7 @@ function snapshotCurrentMonth(){
 function render(){ledgerBalanceCache=null;document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
 function lockView(){
   const first=!(hasSecureVault||legacyPin||currentPin);
-  return `<div class="lock"><div class="lock-card v19-lock"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p class="lock-tag">PRIVATE WEALTH</p>${first?`<div class="notice"><b>SECURITY SETUP</b><br>ตั้ง PIN 6 หลักก่อนเข้าใช้งานครั้งแรก ข้อมูลเดิมในเครื่องจะถูกเข้ารหัสหลังตั้ง PIN สำเร็จ</div><div class="field pin-field"><label>NEW 6-DIGIT PIN</label><input id="firstPin1" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><div class="field pin-field"><label>CONFIRM PIN</label><input id="firstPin2" class="pin" inputmode="numeric" maxlength="6" type="password" placeholder="••••••"></div><button class="primary" id="setupPinBtn">SET PIN & UNLOCK</button>`:`<div class="field pin-field"><label>ENTER 6-DIGIT PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><button class="primary" id="unlockBtn">UNLOCK</button>`}<div class="privacy-line">Private • Local-first • Encrypted</div></div></div>`
+  return `<div class="lock"><div class="lock-card v19-lock"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p class="lock-tag">PRIVATE WEALTH</p>${first?`<div class="notice"><b>SECURITY SETUP</b><br>ตั้ง PIN 6 หลักก่อนเข้าใช้งานครั้งแรก ข้อมูลเดิมในเครื่องจะถูกเข้ารหัสหลังตั้ง PIN สำเร็จ</div><div class="field pin-field"><label>NEW 6-DIGIT PIN</label><input id="firstPin1" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><div class="field pin-field"><label>CONFIRM PIN</label><input id="firstPin2" class="pin" inputmode="numeric" maxlength="6" type="password" placeholder="••••••"></div><button class="primary" id="setupPinBtn">SET PIN & UNLOCK</button>`:`<div class="field pin-field"><label>ENTER 6-DIGIT PIN</label><input id="unlockPin" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><button class="primary" id="unlockBtn">UNLOCK</button><div class="pin-error-msg" role="status"></div>`}<div class="privacy-line">Private • Local-first • Encrypted</div></div></div>`
 }
 function appView(){return `<main class="shell">${page==='dashboard'?dashboard():page==='transactions'?transactions():page==='assets'?assets():page==='plan'?plan():settings()}</main>${bottomNav()}${modal?sheet():''}`}
 function wealthSwitch(active='dashboard'){return `<div class="wealth-switch"><button class="${active==='dashboard'?'active':''}" data-page="dashboard">Dashboard</button><button class="${active==='assets'?'active':''}" data-page="assets">Assets</button></div>`}
@@ -235,7 +235,7 @@ function dashboard(){
   // Low-priority planning cards stay after Recent Transactions.
   const mainRest=order.filter(k=>!['upcoming','calendar','pulse','recent','projects','budget','health','goals'].includes(k)&&map[k]).map(k=>map[k]()).join('');
   const tail=(enabled.has('recent')?recentTx():'')+(enabled.has('projects')?projectDashboard():'')+(enabled.has('budget')?budgetSummary():'')+(enabled.has('health')?healthCard():'')+(enabled.has('goals')?goalsSummary():'');
-  const kpis=`<div class="grid4"><button class="mini liquid kpi-card" data-kpi="liquid"><div class="t">◉ เงินพร้อมใช้</div><div class="v">${THB(t.liquidMoney)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini income kpi-card" data-kpi="income"><div class="t">↑ รายรับ</div><div class="v">${THB(t.income)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini expense kpi-card" data-kpi="expense"><div class="t">↓ รายจ่าย</div><div class="v">${THB(t.expense)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini cashflow kpi-card" data-kpi="cashflow"><div class="t">↕ Cash Flow</div><div class="v">${THB(t.cashflow)}</div><small>แตะเพื่อดูรายละเอียด</small></button></div>`;
+  const kpis=`<div class="grid4"><button class="mini liquid kpi-card" data-kpi="liquid"><div class="t">◉ เงินพร้อมใช้</div><div class="v">${THB(t.liquidMoney)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini income kpi-card" data-kpi="income"><div class="t">↑ รายรับรวม</div><div class="v">${THB(t.income)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini expense kpi-card" data-kpi="expense"><div class="t">↓ รายจ่ายรวมสุทธิ</div><div class="v">${THB(t.expense)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini cashflow kpi-card" data-kpi="cashflow"><div class="t">↕ Cash Flow</div><div class="v">${THB(t.cashflow)}</div><small>แตะเพื่อดูรายละเอียด</small></button></div>`;
   let body=`<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section>${kpis}${upcoming}${calendar}${pulse}${mainRest}${tail}`;
   // Real markup accent bar: avoids fragile pseudo-element rendering/caching on iOS PWA.
   body=body.replaceAll('<div class="section-title">','<div class="section-accent" aria-hidden="true"><i></i><b></b></div><div class="section-title">');
@@ -257,7 +257,7 @@ function financialPulse(){
   const t=totals();
   const status=t.cashflow>=0?'เดือนนี้ยังเป็นบวก':'เดือนนี้ใช้มากกว่ารายรับ';
   const plain=t.cashflow>0?`เดือนนี้เหลือเพิ่ม ${THB(t.cashflow)}`:t.cashflow<0?`เดือนนี้ใช้เงินสะสมเดิม ${THB(Math.abs(t.cashflow))}`:'เดือนนี้รายรับและรายจ่ายสมดุล';
-  return `<section class="section"><div class="section-title"><h2>Financial Pulse</h2><span>เงินจริงเดือนนี้</span></div><div class="card pulse"><b>${t.cashflow>=0?'✓':'!'} ${status}</b><p>↑ รับจริง ${THB(t.income)} · ↓ จ่ายจริงสุทธิ ${THB(t.expense)} · ↕ Cash Flow <strong class="${t.cashflow>=0?'pos':'neg'}">${t.cashflow>=0?'+':''}${THB(t.cashflow)}</strong></p><div class="cashflow-plain ${t.cashflow>=0?'pos':'neg'}">${plain}</div><small class="pulse-note">Budget เป็นวงเงินวางแผนและไม่ถูกรวมในตัวเลขนี้</small></div></section>`
+  return `<section class="section"><div class="section-title"><h2>Financial Pulse</h2><span>เงินจริงเดือนนี้</span></div><div class="card pulse"><b>${t.cashflow>=0?'✓':'!'} ${status}</b><p>↑ รับรวม ${THB(t.income)} · ↓ จ่ายรวมสุทธิ ${THB(t.expense)} · ↕ Cash Flow <strong class="${t.cashflow>=0?'pos':'neg'}">${t.cashflow>=0?'+':''}${THB(t.cashflow)}</strong></p><div class="cashflow-plain ${t.cashflow>=0?'pos':'neg'}">${plain}</div><small class="pulse-note">Budget เป็นวงเงินวางแผนและไม่ถูกรวมในตัวเลขนี้</small></div></section>`
 }
 
 function compactMoney(v){
@@ -310,7 +310,7 @@ function spendingCard(){
 function projectDashboard(){
   const active=projects.map(name=>({name,...projectStats(name)})).filter(x=>x.income||x.expense||x.inKind);
   if(!active.length)return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>เดือนนี้</span></div><div class="card budget-empty"><b>ยังไม่มีรายการแยกโครงการ</b><p>เวลาบันทึกรายรับ/รายจ่าย เลือก บ้าน กทม., บ้าน เกษตรวิสัย, เลี้ยงไก่, ป่ายาง หรือ Polar Farm ได้</p></div></section>`;
-  return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>เดือนนี้</span></div><div class="card tx-list">${active.map(x=>`<div class="tx premium-project-row"><div class="tx-ico">${projectIcon(x.name)}</div><div class="tx-main"><b>${esc(x.name)}</b><small>รับเงินจริง ${THB(x.income)} · จ่าย ${THB(x.expense)}${x.inKind?` · ใช้เอง ${THB(x.inKind)}`:''}</small></div><div class="amt ${x.net>=0?'pos':'neg'}">${x.net>=0?'+':''}${THB(x.net)}</div></div>`).join('')}</div></section>`
+  return `<section class="section"><div class="section-title"><h2>Projects & Properties</h2><span>เดือนนี้</span></div><div class="card tx-list">${active.map(x=>`<div class="tx premium-project-row"><div class="tx-ico">${projectIcon(x.name)}</div><div class="tx-main"><b>${esc(x.name)}</b><small>รับ ${THB(x.income)} · จ่าย ${THB(x.expense)}${x.inKind?` · ใช้เอง ${THB(x.inKind)}`:''}</small></div><div class="amt ${x.net>=0?'pos':'neg'}">${x.net>=0?'+':''}${THB(x.net)}</div></div>`).join('')}</div></section>`
 }
 function projectIcon(n){return ({'บ้าน กทม.':'🏙️','House 19/307 @18 ตรว.':'🏠','House 19/308 @18 ตรว.':'🏠','บ้าน เกษตรวิสัย':'🏡','เลี้ยงไก่':'🐓','ป่ายาง':'🌳','ป่ายูคา':'🌳','Polar Farm 1':'🌾','Polar Farm 2':'🌾','ส่วนตัว/ทั่วไป':'👤'})[n]||'◆'}
 function budgetSummary(){
@@ -439,7 +439,7 @@ function assetBrand(a){
   if(a?.kind==='debt')return {key:'other',name:'หนี้สิน'};
   return {key:'other',name:'ทรัพย์สินอื่น'};
 }
-const ASSET_ICON_KEYS=new Set(['bofa','scb','ktb','kbank','gsb','ttb','bbl','honda','mitsubishi','gpf','gold','land','house','other','wallet','fund','vehicle']);
+const ASSET_ICON_KEYS=new Set(['bofa','scb','ktb','kbank','gsb','ttb','bbl','baac','honda','mitsubishi','gpf','gold','land','house','other','wallet','fund','vehicle']);
 function investmentIcon(a){
   const isStock=(a?.investmentGroup||'')==='ksec';
   return isStock
@@ -653,7 +653,7 @@ function bind(){
   if(!unlocked){
     const setup=async()=>{const a=$('#firstPin1')?.value||'',b=$('#firstPin2')?.value||'';if(!/^\d{6}$/.test(a))return alert('กรุณาตั้ง PIN ตัวเลข 6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');try{currentPin=a;legacyPin=null;data.pin=null;data.autoLock=true;unlocked=true;save();await saveSeq;if(!hasSecureVault)throw new Error('vault');localStorage.removeItem(DB_KEY);render();alert('ตั้ง PIN และเข้ารหัสข้อมูลในเครื่องแล้ว')}catch{currentPin=null;unlocked=false;alert('ไม่สามารถสร้าง Secure Vault ได้ กรุณาลองอีกครั้ง')}}; 
     $('#setupPinBtn')?.addEventListener('click',setup); $('#firstPin2')?.addEventListener('keydown',e=>e.key==='Enter'&&setup());
-    const unlock=async()=>{const pin=$('#unlockPin')?.value||'';try{if(hasSecureVault)await unlockSecure(pin);else await secureLegacy(pin);data.lastActive=Date.now();render()}catch{alert('PIN ไม่ถูกต้อง หรือข้อมูลเข้ารหัสไม่สามารถเปิดได้')}};
+    const unlock=async()=>{const input=$('#unlockPin');const btn=$('#unlockBtn');const pin=input?.value||'';if(btn?.disabled)return;if(!/^\d{6}$/.test(pin)){if(input){input.value='';input.focus()}return}try{if(hasSecureVault)await unlockSecure(pin);else await secureLegacy(pin);sessionStorage.removeItem('myfinance_pin_fail_count');data.lastActive=Date.now();render()}catch{const fails=Number(sessionStorage.getItem('myfinance_pin_fail_count')||0)+1;sessionStorage.setItem('myfinance_pin_fail_count',String(fails));if(input){input.classList.add('pin-error');setTimeout(()=>input.classList.remove('pin-error'),420);setTimeout(()=>{input.value='';input.focus()},450)}const wait=fails>=5?30:0;if(wait&&btn){btn.disabled=true;let left=wait;btn.textContent=`ลองใหม่ใน ${left} วินาที`;const timer=setInterval(()=>{left--;if(left<=0){clearInterval(timer);btn.disabled=false;btn.textContent='UNLOCK';input?.focus()}else btn.textContent=`ลองใหม่ใน ${left} วินาที`},1000)}else{const msg=document.querySelector('.pin-error-msg');if(msg){msg.textContent='PIN ไม่ถูกต้อง กรุณาลองใหม่';setTimeout(()=>msg.textContent='',2200)}}}};
     $('#unlockBtn')?.addEventListener('click',unlock); $('#unlockPin')?.addEventListener('keydown',e=>e.key==='Enter'&&unlock());
     return;
   }
