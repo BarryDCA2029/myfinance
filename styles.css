@@ -282,3 +282,12 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .investment-group-head b{font-size:13px}.investment-group-head span{font-weight:700;font-size:13px}
 .asset-closed{opacity:.72}.asset-closed .amt{font-size:12px;font-weight:700}
 .check-row{display:flex;gap:8px;align-items:center;font-size:13px;margin:4px 0 12px}
+
+/* V1.2 — premium semantic investment icons + gold history */
+.asset-row .premium-asset-ico:has(.investment-glyph){background:linear-gradient(145deg,#262b2d,#111416)!important;border-color:#3b4143!important;box-shadow:0 4px 12px rgba(10,14,16,.18)!important;padding:3px!important}
+.investment-glyph{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;background:linear-gradient(145deg,#2d3234,#15191b);color:#eef0ed}
+.investment-glyph svg{width:27px;height:27px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.investment-fund{color:#d8dcda}.investment-stock{color:#f1f2ee}
+.calculated-value[readonly]{background:#f0f2ef!important;color:#28302d!important;font-weight:800}
+.gold-price-history{margin-top:16px;padding-top:4px}.gold-history-list{display:grid;gap:7px;margin-top:10px}.gold-history-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 11px;border:1px solid #e1e3df;border-radius:12px;background:#fafaf7}.gold-history-row>div{display:grid;gap:2px}.gold-history-row b{font-size:14px}.gold-history-row small,.gold-history-row em{font-size:11px;color:#75807b;font-style:normal}.gold-history-row em{text-align:right;white-space:nowrap}
+.asset-saved-flash{animation:assetSavedFlash 1.35s ease-out}@keyframes assetSavedFlash{0%{box-shadow:0 0 0 3px rgba(50,62,62,.28)}100%{box-shadow:none}}
