@@ -441,10 +441,13 @@ function assetBrand(a){
 }
 const ASSET_ICON_KEYS=new Set(['bofa','scb','ktb','kbank','gsb','ttb','bbl','baac','honda','mitsubishi','gpf','gold','land','house','other','wallet','fund','vehicle']);
 function investmentIcon(a){
-  const isStock=(a?.investmentGroup||'')==='ksec';
-  return isStock
-    ? `<span class="investment-glyph investment-stock" aria-label="หุ้น"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 34l9-10 7 6 13-17"/><path d="M31 13h7v7"/></svg></span>`
-    : `<span class="investment-glyph investment-fund" aria-label="กองทุน"><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 34V24M20 34V17M30 34V21M40 34V11"/><path d="M8 37h34"/></svg></span>`;
+  const group=(a?.investmentGroup||'').toLowerCase();
+  const name=(a?.name||'').toLowerCase();
+  let src='fund.png', alt='หุ้น/กองทุน';
+  if(group==='ksec' && /cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port/.test(name)){src='wallet.png';alt='Cash in Port';}
+  else if(group==='ttbinv' || /ttb\s*rmf|jb25|^mf$/.test(name.trim())){src='ttb.png';alt='TTB Investment';}
+  else if(group==='scbinv' || /scbs&p500|scb\s*s&p500/.test(name)){src='scb.png';alt='SCB Investment';}
+  return `<img class="bank-logo asset-picture investment-picture" src="${src}" alt="${esc(alt)}">`;
 }
 function assetIcon(a){if(a?.kind==='stock')return investmentIcon(a);const b=assetBrand(a);const genericMap={cashstack:'wallet.png',vehicle:'vehicle.png',other:'other.png'};if(genericMap[b.key])return `<img class="bank-logo asset-picture" src="${genericMap[b.key]}" alt="${esc(b.name)}">`;return ASSET_ICON_KEYS.has(b.key)?`<img class="bank-logo asset-picture" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">●</span>`}
 function bankRank(a){
