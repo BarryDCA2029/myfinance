@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.3';
+const APP_VERSION='1.4';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','เบิกค่าเช่าบ้าน','เบิก พ.ต.ส.','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -444,26 +444,43 @@ function investmentIcon(a){
   const group=(a?.investmentGroup||'').toLowerCase();
   const name=(a?.name||'').toLowerCase();
   let src='fund.png', alt='หุ้น/กองทุน';
-  if(group==='ksec' && /cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port/.test(name)){src='wallet.png';alt='Cash in Port';}
+  if(group==='ksec' && /cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port|^port\s*k[- ]?securities$|port\s*k[- ]?securities/.test(name)){src='wallet.png';alt='Cash in Port';}
   else if(group==='ttbinv' || /ttb\s*rmf|jb25|^mf$/.test(name.trim())){src='ttb.png';alt='TTB Investment';}
   else if(group==='scbinv' || /scbs&p500|scb\s*s&p500/.test(name)){src='scb.png';alt='SCB Investment';}
-  return `<img class="bank-logo asset-picture investment-picture" src="${src}" alt="${esc(alt)}">`;
+  return `<img class="bank-logo asset-picture investment-picture" src="${src}?v=1.4" alt="${esc(alt)}">`;
 }
 function assetIcon(a){if(a?.kind==='stock')return investmentIcon(a);const b=assetBrand(a);const genericMap={cashstack:'wallet.png',vehicle:'vehicle.png',other:'other.png'};if(genericMap[b.key])return `<img class="bank-logo asset-picture" src="${genericMap[b.key]}" alt="${esc(b.name)}">`;return ASSET_ICON_KEYS.has(b.key)?`<img class="bank-logo asset-picture" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">●</span>`}
 function bankRank(a){
   const key=assetBrand(a).key;
-  const order=['ktb','kbank','gsb','scb','bbl','baac','ttb','bofa','wallet','default'];
+  // Bank/cash display order. TTB comes first; TTB All Free is handled as the first item below.
+  const order=['ttb','kbank','scb','ktb','gsb','bbl','baac','bofa','cashstack','wallet','default'];
   const i=order.indexOf(key); return i<0?order.length:i;
 }
+function investmentIconRank(a){
+  const group=(a?.investmentGroup||'').toLowerCase();
+  const name=(a?.name||'').toLowerCase();
+  if(group==='ksec' && /cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port|^port\s*k[- ]?securities$|port\s*k[- ]?securities/.test(name))return 1; // wallet
+  if(group==='ttbinv' || /ttb\s*rmf|jb25|^mf$/.test(name.trim()))return 2; // TTB
+  if(group==='scbinv' || /scbs&p500|scb\s*s&p500/.test(name))return 3; // SCB
+  return 0; // market/fund icon
+}
 function sortedAssetsForView(list){
-  const kindOrder={vehicle:0,cash:1,stock:2,gold:3,property:4,other:5,debt:6};
+  // V1.4 display-only ordering: banks first, then investments, gold, property, vehicles, other; GPF always last.
+  const kindOrder={cash:0,stock:1,gold:2,property:3,vehicle:4,other:5,debt:6};
   return list.map((a,i)=>({a,i})).sort((x,y)=>{
+    const xg=assetBrand(x.a).key==='gpf', yg=assetBrand(y.a).key==='gpf';
+    if(xg!==yg)return xg?1:-1;
     const ka=kindOrder[x.a.kind]??99, kb=kindOrder[y.a.kind]??99;
     if(ka!==kb)return ka-kb;
     if(x.a.kind==='cash'&&y.a.kind==='cash'){
+      const xa=assetBrand(x.a).key==='ttb'&&/all free/i.test(x.a.name||'');
+      const ya=assetBrand(y.a).key==='ttb'&&/all free/i.test(y.a.name||'');
+      if(xa!==ya)return xa?-1:1;
       const br=bankRank(x.a)-bankRank(y.a); if(br)return br;
-      if(assetBrand(x.a).key==='ttb'&&assetBrand(y.a).key==='ttb'){const ax=/all free/i.test(x.a.name||'')?0:1, ay=/all free/i.test(y.a.name||'')?0:1;if(ax!==ay)return ax-ay;}
       const bn=assetBrand(x.a).name.localeCompare(assetBrand(y.a).name,'th'); if(bn)return bn;
+    }
+    if(x.a.kind==='stock'&&y.a.kind==='stock'){
+      const ir=investmentIconRank(x.a)-investmentIconRank(y.a); if(ir)return ir;
     }
     return x.i-y.i;
   }).map(x=>x.a);
