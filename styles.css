@@ -301,3 +301,20 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .pin-error-msg{height:18px;margin-top:8px;color:#b64040;font-size:12px;font-weight:650}
 @keyframes pinShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}50%{transform:translateX(7px)}75%{transform:translateX(-4px)}}
 .grid4 .mini.income .v{color:#008f4c!important}.grid4 .mini.expense .v{color:#d52b2b!important}
+
+/* MY FINANCE V1.5 — immediate 6-digit PIN keypad */
+.v19-lock{max-width:390px!important;padding:26px 24px 18px!important}
+.pin-ready-title{margin:22px 0 18px;color:#21394a;font-size:18px;font-weight:750;text-align:center}
+.pin-dots{height:38px;display:flex;align-items:center;justify-content:center;gap:16px;margin:0 auto 16px}
+.pin-dots i{display:block;width:15px;height:15px;border-radius:50%;background:#d7dadd;box-shadow:inset 0 1px 2px rgba(0,0,0,.04);transition:.12s}
+.pin-dots i.filled{background:#163b55;transform:scale(1.05)}
+.pin-dots.pin-error{animation:pinShake .34s ease}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:3px 22px;margin:6px auto 0;max-width:310px}
+.pin-keypad button,.pin-keypad span{height:55px}
+.pin-keypad button{border:0;background:transparent;border-radius:18px;color:#142c3d;font-size:25px;font-weight:650;line-height:55px;padding:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.pin-keypad button:active{background:rgba(22,59,85,.08);transform:scale(.94)}
+.pin-keypad button:disabled{opacity:.48}
+.pin-keypad .pin-backspace{font-size:22px;font-weight:500}
+.v19-lock .pin-error-msg{height:18px;margin:0 0 2px;font-size:12px}
+.v19-lock .privacy-line{margin-top:9px}
+@media(max-height:720px){.v19-lock{padding-top:18px!important}.v19-lock .lock-logo{width:58px!important;height:58px!important}.v19-lock h1{font-size:23px!important}.pin-ready-title{margin:13px 0 10px}.pin-dots{margin-bottom:8px}.pin-keypad button,.pin-keypad span{height:48px}.pin-keypad button{line-height:48px}}
