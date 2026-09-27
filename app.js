@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.5';
+const APP_VERSION='1.6';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','เบิกค่าเช่าบ้าน','เบิก พ.ต.ส.','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -16,6 +16,7 @@ const defaultData={
   budgets:{},
   projectBudgets:{},
   snapshots:[],
+  dailyNetWorthSnapshots:[],
   reconciliations:[],
   auditLog:[],
   verifiedEmptyDays:[],
@@ -72,6 +73,7 @@ function migrate(raw){
   merged.budgets=raw.budgets&&typeof raw.budgets==='object'?raw.budgets:{};
   merged.projectBudgets=raw.projectBudgets&&typeof raw.projectBudgets==='object'?raw.projectBudgets:{};
   merged.snapshots=Array.isArray(raw.snapshots)?raw.snapshots:[];
+  merged.dailyNetWorthSnapshots=Array.isArray(raw.dailyNetWorthSnapshots)?raw.dailyNetWorthSnapshots:[];
   merged.reconciliations=Array.isArray(raw.reconciliations)?raw.reconciliations:[];
   merged.auditLog=Array.isArray(raw.auditLog)?raw.auditLog:[];
   merged.verifiedEmptyDays=Array.isArray(raw.verifiedEmptyDays)?raw.verifiedEmptyDays:[];
@@ -210,6 +212,26 @@ function snapshotCurrentMonth(){
   data.snapshots=data.snapshots.sort((a,b)=>a.month.localeCompare(b.month)).slice(-60);
 }
 
+function netWorthBreakdown(){
+  const out={bank:0,investment:0,gold:0,property:0,vehicle:0,other:0,debt:0};
+  data.assets.forEach(a=>{const v=Number(a.value||0);if(a.kind==='debt'){out.debt+=v;return}if(a.kind==='cash')out.bank+=v;else if(a.kind==='stock')out.investment+=v;else if(a.kind==='gold')out.gold+=v;else if(a.kind==='property')out.property+=v;else if(a.kind==='vehicle')out.vehicle+=v;else out.other+=v});
+  Object.keys(out).forEach(k=>out[k]=round2(out[k])); return out;
+}
+function captureDailyNetWorth(){
+  const t=totals(), date=today(), breakdown=netWorthBreakdown();
+  const row={date,netWorth:round2(t.netWorth),assetTotal:round2(t.assetTotal),debtTotal:round2(t.debtTotal),breakdown,updatedAt:new Date().toISOString()};
+  data.dailyNetWorthSnapshots=Array.isArray(data.dailyNetWorthSnapshots)?data.dailyNetWorthSnapshots:[];
+  const i=data.dailyNetWorthSnapshots.findIndex(x=>x.date===date);
+  if(i>=0)data.dailyNetWorthSnapshots[i]=row; else data.dailyNetWorthSnapshots.push(row);
+  data.dailyNetWorthSnapshots=data.dailyNetWorthSnapshots.sort((a,b)=>a.date.localeCompare(b.date)).slice(-1825);
+}
+function dailyNetWorthHistorySheet(){
+  const rows=[...(data.dailyNetWorthSnapshots||[])].sort((a,b)=>b.date.localeCompare(a.date));
+  const labels={bank:'เงินสด/ธนาคาร',investment:'หุ้น/กองทุน',gold:'ทอง',property:'อสังหาฯ',vehicle:'รถ/ยานพาหนะ',other:'อื่น ๆ',debt:'หนี้สิน'};
+  const list=rows.map((r,i)=>{const prev=rows[i+1];const d=prev?round2(Number(r.netWorth)-Number(prev.netWorth)):null;const pct=prev&&Number(prev.netWorth)!==0?d/Math.abs(Number(prev.netWorth))*100:null;const unusual=d!==null&&(Math.abs(d)>=100000||Math.abs(pct||0)>=1);const detail=Object.entries(r.breakdown||{}).map(([k,v])=>`<span>${labels[k]||k}<b>${THB(v)}</b></span>`).join('');return `<details class="nw-day ${unusual?'nw-alert':''}"><summary><div><b>${new Date(r.date+'T12:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})}</b><small>${prev?'เปลี่ยนจากวันก่อน':'Starting Snapshot'}</small></div><div class="nw-day-value"><b>${THB(r.netWorth)}</b>${d!==null?`<small class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${THB(d)} (${pct>=0?'+':''}${pct.toFixed(2)}%)${unusual?' !':''}</small>`:''}</div></summary><div class="nw-breakdown">${detail}</div></details>`}).join('');
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet nw-history-sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>Net Worth History</h3><p class="field-hint">วันละ 1 Snapshot · วันเดียวกันจะอัปเดตเป็นยอดล่าสุด ไม่สร้างประวัติย้อนหลังปลอม</p><div class="nw-history-list">${list||'<div class="empty">ยังไม่มี Snapshot รายวัน</div>'}</div></div></div>`;
+}
+
 function render(){ledgerBalanceCache=null;document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
 function lockView(){
   const first=!(hasSecureVault||legacyPin||currentPin);
@@ -237,7 +259,7 @@ function dashboard(){
   const mainRest=order.filter(k=>!['upcoming','calendar','pulse','recent','projects','budget','health','goals'].includes(k)&&map[k]).map(k=>map[k]()).join('');
   const tail=(enabled.has('recent')?recentTx():'')+(enabled.has('projects')?projectDashboard():'')+(enabled.has('budget')?budgetSummary():'')+(enabled.has('health')?healthCard():'')+(enabled.has('goals')?goalsSummary():'');
   const kpis=`<div class="grid4"><button class="mini liquid kpi-card" data-kpi="liquid"><div class="t">◉ เงินพร้อมใช้</div><div class="v">${THB(t.liquidMoney)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini income kpi-card" data-kpi="income"><div class="t">↑ รายรับรวม</div><div class="v">${THB(t.income)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini expense kpi-card" data-kpi="expense"><div class="t">↓ รายจ่ายรวมสุทธิ</div><div class="v">${THB(t.expense)}</div><small>แตะเพื่อดูรายละเอียด</small></button><button class="mini cashflow kpi-card" data-kpi="cashflow"><div class="t">↕ Cash Flow</div><div class="v">${THB(t.cashflow)}</div><small>แตะเพื่อดูรายละเอียด</small></button></div>`;
-  let body=`<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div></section>${kpis}${upcoming}${calendar}${pulse}${mainRest}${tail}`;
+  let body=`<section class="hero"><div class="label">◆ NET WORTH</div><div class="value">${THB(t.netWorth)}</div><div class="hero-foot"><div class="delta">${t.netWorth>0?'●':'○'} Current snapshot ${pct!==null?`· ${pct>=0?'+':''}${pct.toFixed(1)}% vs เดือนก่อน`:''}</div><button class="hero-history" id="netWorthHistory">History ›</button></div></section>${kpis}${upcoming}${calendar}${pulse}${mainRest}${tail}`;
   // Real markup accent bar: avoids fragile pseudo-element rendering/caching on iOS PWA.
   body=body.replaceAll('<div class="section-title">','<div class="section-accent" aria-hidden="true"><i></i><b></b></div><div class="section-title">');
   return `${header()}${wealthSwitch('dashboard')}${body}`
@@ -415,8 +437,8 @@ function investmentSummary(){
   return {cost,value,pl:value-cost,pct:cost?((value-cost)/cost*100):0};
 }
 function investmentGroupLabel(g){return ({ksec:'K Securities',ttbinv:'TTB Investment',scbinv:'SCB Investment',otherinv:'Other Investment'})[g]||'ไม่จัดกลุ่ม'}
-function stockRowHtml(a,idx){const closed=(a.investmentStatus||'holding')==='closed';const pl=closed?Number(a.realizedPL||0):Number(a.value||0)-Number(a.cost||0)-Number(a.improvementCost||0);const badge=closed?' · Closed':a.openingAsset?' · ยอดยกมา':'';return `<button class="tx tx-button asset-row asset-stripe-${idx%2} ${closed?'asset-closed':''}" data-asset-id="${a.id}"><div class="tx-ico premium-asset-ico">${assetIcon(a)}</div><div class="tx-main"><b>${esc(a.name)}</b><small>${esc(assetKindLabel(a.kind))}${badge} · ${closed?'Realized':'P/L'} <span class="${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${THB(pl)}</span></small></div><div class="amt">${closed?'Closed':THB(a.value)}</div></button>`}
-function groupedStockList(list){const groups=['ksec','ttbinv','scbinv','otherinv',''];return groups.map(g=>{const rows=list.filter(a=>(a.investmentGroup||'')===g);if(!rows.length)return '';const active=rows.filter(a=>(a.investmentStatus||'holding')!=='closed');const total=active.reduce((s,a)=>s+Number(a.value||0),0);return `<div class="investment-group"><div class="investment-group-head"><b>${esc(investmentGroupLabel(g))}</b><span>${THB(total)}</span></div>${rows.map((a,i)=>stockRowHtml(a,i)).join('')}</div>`}).join('')}
+function stockRowHtml(a,idx){const closed=(a.investmentStatus||'holding')==='closed';const cashLike=isKsecCashAsset(a);const pl=closed?Number(a.realizedPL||0):Number(a.value||0)-Number(a.cost||0)-Number(a.improvementCost||0);const badge=closed?' · Closed':a.openingAsset?' · ยอดยกมา':'';const sub=cashLike?'เงินสดในพอร์ต':`${esc(assetKindLabel(a.kind))}${badge} · ${closed?'Realized':'P/L'} <span class="${pl>=0?'pos':'neg'}">${pl>=0?'+':''}${THB(pl)}</span>`;return `<button class="tx tx-button asset-row asset-stripe-${idx%2} ${closed?'asset-closed':''}" data-asset-id="${a.id}"><div class="tx-ico premium-asset-ico">${assetIcon(a)}</div><div class="tx-main"><b>${esc(a.name)}</b><small>${sub}</small></div><div class="amt">${closed?'Closed':THB(a.value)}</div></button>`}
+function groupedStockList(list){const groups=['ksec','ttbinv','scbinv','otherinv',''];return groups.map(g=>{const rows=list.filter(a=>(a.investmentGroup||'')===g);if(!rows.length)return '';const active=rows.filter(a=>(a.investmentStatus||'holding')!=='closed');const total=active.reduce((s,a)=>s+Number(a.value||0),0);const realized=rows.filter(a=>(a.investmentStatus||'holding')==='closed').reduce((s,a)=>s+Number(a.realizedPL||0),0);const unrealized=active.filter(a=>!isKsecCashAsset(a)).reduce((s,a)=>s+Number(a.value||0)-Number(a.cost||0)-Number(a.improvementCost||0),0);return `<div class="investment-group"><div class="investment-group-head"><div><b>${esc(investmentGroupLabel(g))}</b>${g?`<small>Realized <em class="${realized>=0?'pos':'neg'}">${realized>=0?'+':''}${THB(realized)}</em> · Unrealized <em class="${unrealized>=0?'pos':'neg'}">${unrealized>=0?'+':''}${THB(unrealized)}</em></small>`:''}</div><span>${THB(total)}</span></div>${rows.map((a,i)=>stockRowHtml(a,i)).join('')}</div>`}).join('')}
 function assetBrand(a){
   const n=(a?.name||'').toLowerCase();
   if(a?.kind==='stock')return {key:'investment',name:'หุ้น/กองทุน'};
@@ -441,6 +463,7 @@ function assetBrand(a){
   return {key:'other',name:'ทรัพย์สินอื่น'};
 }
 const ASSET_ICON_KEYS=new Set(['bofa','scb','ktb','kbank','gsb','ttb','bbl','baac','honda','mitsubishi','gpf','gold','land','house','other','wallet','fund','vehicle']);
+function isKsecCashAsset(a){const group=(a?.investmentGroup||'').toLowerCase();const name=(a?.name||'').toLowerCase();return group==='ksec'&&/cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port|^port\s*k[- ]?securities$|port\s*k[- ]?securities/.test(name)}
 function investmentIcon(a){
   const group=(a?.investmentGroup||'').toLowerCase();
   const name=(a?.name||'').toLowerCase();
@@ -448,7 +471,7 @@ function investmentIcon(a){
   if(group==='ksec' && /cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port|^port\s*k[- ]?securities$|port\s*k[- ]?securities/.test(name)){src='wallet.png';alt='Cash in Port';}
   else if(group==='ttbinv' || /ttb\s*rmf|jb25|^mf$/.test(name.trim())){src='ttb.png';alt='TTB Investment';}
   else if(group==='scbinv' || /scbs&p500|scb\s*s&p500/.test(name)){src='scb.png';alt='SCB Investment';}
-  return `<img class="bank-logo asset-picture investment-picture" src="${src}?v=1.4" alt="${esc(alt)}">`;
+  return `<img class="bank-logo asset-picture investment-picture" src="${src}?v=1.6" alt="${esc(alt)}">`;
 }
 function assetIcon(a){if(a?.kind==='stock')return investmentIcon(a);const b=assetBrand(a);const genericMap={cashstack:'wallet.png',vehicle:'vehicle.png',other:'other.png'};if(genericMap[b.key])return `<img class="bank-logo asset-picture" src="${genericMap[b.key]}" alt="${esc(b.name)}">`;return ASSET_ICON_KEYS.has(b.key)?`<img class="bank-logo asset-picture" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">●</span>`}
 function bankRank(a){
@@ -555,6 +578,7 @@ function sheet(){
   if(modal==='planNoteHistory')return planNoteHistorySheet();
   if(modal==='dashboardCustomize')return dashboardCustomizeSheet();
   if(modal==='kpiDetail')return kpiDetailSheet();
+  if(modal==='netWorthHistory')return dailyNetWorthHistorySheet();
   return '';
 }
 function kpiDetailSheet(){
@@ -672,12 +696,12 @@ function updateCategoryOptions(type,selected=''){
 function moveDashboardCard(k,dir){const a=[...(data.settings.dashboardCards||[])];const i=a.indexOf(k);if(i<0)return;const j=i+dir;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];data.settings.dashboardCards=a;save();render()}
 function bind(){
   if(!unlocked){
-    const setup=async()=>{const a=$('#firstPin1')?.value||'',b=$('#firstPin2')?.value||'';if(!/^\d{6}$/.test(a))return alert('กรุณาตั้ง PIN ตัวเลข 6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');try{currentPin=a;legacyPin=null;data.pin=null;data.autoLock=true;unlocked=true;save();await saveSeq;if(!hasSecureVault)throw new Error('vault');localStorage.removeItem(DB_KEY);render();alert('ตั้ง PIN และเข้ารหัสข้อมูลในเครื่องแล้ว')}catch{currentPin=null;unlocked=false;alert('ไม่สามารถสร้าง Secure Vault ได้ กรุณาลองอีกครั้ง')}}; 
+    const setup=async()=>{const a=$('#firstPin1')?.value||'',b=$('#firstPin2')?.value||'';if(!/^\d{6}$/.test(a))return alert('กรุณาตั้ง PIN ตัวเลข 6 หลัก');if(a!==b)return alert('PIN ไม่ตรงกัน');try{currentPin=a;legacyPin=null;data.pin=null;data.autoLock=true;unlocked=true;captureDailyNetWorth();save();await saveSeq;if(!hasSecureVault)throw new Error('vault');localStorage.removeItem(DB_KEY);render();alert('ตั้ง PIN และเข้ารหัสข้อมูลในเครื่องแล้ว')}catch{currentPin=null;unlocked=false;alert('ไม่สามารถสร้าง Secure Vault ได้ กรุณาลองอีกครั้ง')}}; 
     $('#setupPinBtn')?.addEventListener('click',setup); $('#firstPin2')?.addEventListener('keydown',e=>e.key==='Enter'&&setup());
     let keypadPin='', keypadBusy=false, keypadLocked=false;
     const paintPin=()=>$$('[data-pin-dot]').forEach((d,i)=>d.classList.toggle('filled',i<keypadPin.length));
     const setKeypadDisabled=disabled=>$$('[data-pin-key],[data-pin-back]').forEach(b=>b.disabled=disabled);
-    const unlock=async()=>{if(keypadBusy||keypadLocked||keypadPin.length!==6)return;keypadBusy=true;setKeypadDisabled(true);try{if(hasSecureVault)await unlockSecure(keypadPin);else await secureLegacy(keypadPin);sessionStorage.removeItem('myfinance_pin_fail_count');data.lastActive=Date.now();render()}catch{const fails=Number(sessionStorage.getItem('myfinance_pin_fail_count')||0)+1;sessionStorage.setItem('myfinance_pin_fail_count',String(fails));const dots=$('#pinDots'),msg=document.querySelector('.pin-error-msg');dots?.classList.add('pin-error');if(msg)msg.textContent='PIN ไม่ถูกต้อง กรุณาลองใหม่';setTimeout(()=>{dots?.classList.remove('pin-error');keypadPin='';paintPin()},500);if(fails>=5){keypadLocked=true;let left=30;const tick=()=>{if(msg)msg.textContent=`ลองใหม่ใน ${left} วินาที`;if(left--<=0){keypadLocked=false;keypadBusy=false;setKeypadDisabled(false);if(msg)msg.textContent='';return}setTimeout(tick,1000)};tick();return}setTimeout(()=>{keypadBusy=false;setKeypadDisabled(false);if(msg)msg.textContent=''},650)}};
+    const unlock=async()=>{if(keypadBusy||keypadLocked||keypadPin.length!==6)return;keypadBusy=true;setKeypadDisabled(true);try{if(hasSecureVault)await unlockSecure(keypadPin);else await secureLegacy(keypadPin);sessionStorage.removeItem('myfinance_pin_fail_count');data.lastActive=Date.now();captureDailyNetWorth();save();render()}catch{const fails=Number(sessionStorage.getItem('myfinance_pin_fail_count')||0)+1;sessionStorage.setItem('myfinance_pin_fail_count',String(fails));const dots=$('#pinDots'),msg=document.querySelector('.pin-error-msg');dots?.classList.add('pin-error');if(msg)msg.textContent='PIN ไม่ถูกต้อง กรุณาลองใหม่';setTimeout(()=>{dots?.classList.remove('pin-error');keypadPin='';paintPin()},500);if(fails>=5){keypadLocked=true;let left=30;const tick=()=>{if(msg)msg.textContent=`ลองใหม่ใน ${left} วินาที`;if(left--<=0){keypadLocked=false;keypadBusy=false;setKeypadDisabled(false);if(msg)msg.textContent='';return}setTimeout(tick,1000)};tick();return}setTimeout(()=>{keypadBusy=false;setKeypadDisabled(false);if(msg)msg.textContent=''},650)}};
     $$('[data-pin-key]').forEach(b=>b.addEventListener('click',()=>{if(keypadBusy||keypadLocked||keypadPin.length>=6)return;keypadPin+=b.dataset.pinKey;paintPin();if(keypadPin.length===6)unlock()}));
     $('[data-pin-back]')?.addEventListener('click',()=>{if(keypadBusy||keypadLocked)return;keypadPin=keypadPin.slice(0,-1);paintPin()});
     return;
@@ -685,6 +709,7 @@ function bind(){
   $$('.nav').forEach(b=>b.addEventListener('click',()=>{page=b.dataset.page;render()}));
   $$('.wealth-switch [data-page]').forEach(b=>b.addEventListener('click',()=>{page=b.dataset.page;assetFilter='all';render()}));
 
+  $('#netWorthHistory')?.addEventListener('click',()=>{captureDailyNetWorth();save();modal='netWorthHistory';render()});
   $$('[data-kpi]').forEach(b=>b.addEventListener('click',()=>{detailType=b.dataset.kpi;detailMonth=monthKey();modal='kpiDetail';render()}));
   $('#detailPrev')?.addEventListener('click',()=>{const [y,m]=detailMonth.split('-').map(Number);detailMonth=monthKey(new Date(y,m-2,1));render()});
   $('#detailNext')?.addEventListener('click',()=>{const [y,m]=detailMonth.split('-').map(Number);detailMonth=monthKey(new Date(y,m,1));render()});
@@ -746,9 +771,9 @@ function bind(){
       const i=data.transactions.findIndex(x=>x.id===editId);
       if(i>=0){reverseTxAssetEffect(data.transactions[i]); data.transactions[i]=row; applyTxAssetEffect(row)}
     }else{data.transactions.push(row);applyTxAssetEffect(row)}
-    audit(modal==='editTx'?'แก้ไขรายการ':'เพิ่มรายการ',`${typeLabel(row.type)} ${THB(row.amount)}`); snapshotCurrentMonth(); save(); txDraftDate=''; modal=null; editId=null; render();
+    audit(modal==='editTx'?'แก้ไขรายการ':'เพิ่มรายการ',`${typeLabel(row.type)} ${THB(row.amount)}`); snapshotCurrentMonth(); captureDailyNetWorth(); save(); txDraftDate=''; modal=null; editId=null; render();
   });
-  $('#deleteTx')?.addEventListener('click',()=>{if(confirm('ลบรายการนี้ใช่หรือไม่?')){const old=data.transactions.find(x=>x.id===editId);reverseTxAssetEffect(old);audit('ลบรายการ',`${typeLabel(old?.type)} ${THB(old?.amount)}`);data.transactions=data.transactions.filter(x=>x.id!==editId);snapshotCurrentMonth();save();modal=null;editId=null;render()}});
+  $('#deleteTx')?.addEventListener('click',()=>{if(confirm('ลบรายการนี้ใช่หรือไม่?')){const old=data.transactions.find(x=>x.id===editId);reverseTxAssetEffect(old);audit('ลบรายการ',`${typeLabel(old?.type)} ${THB(old?.amount)}`);data.transactions=data.transactions.filter(x=>x.id!==editId);snapshotCurrentMonth();captureDailyNetWorth();save();modal=null;editId=null;render()}});
 
   $('#assetKind')?.addEventListener('change',e=>{const tracked=['stock','gold','property','vehicle','other'].includes(e.target.value);const sf=$('#trackedAssetFields'),nf=$('#normalValueField');if(sf)sf.style.display=tracked?'block':'none';if(nf)nf.style.display=tracked?'none':'block'});
   const updateGoldValue=()=>{const w=parseMoney($('#goldWeightBaht')?.value||0),p=parseMoney($('#goldPrice')?.value||0),v=$('#assetValue');if(v&&Number.isFinite(w)&&Number.isFinite(p))v.value=num(round2(w*p))};
@@ -760,14 +785,14 @@ function bind(){
     if(kind==='stock'&&row.investmentStatus==='closed'){row.units=0;row.value=0;if(row.saleProceeds>0)row.realizedPL=round2(row.saleProceeds-row.cost-row.improvementCost)}
     if(!row.name)return alert('กรุณาใส่ชื่อทรัพย์สิน'); if(!Number.isFinite(row.value)||row.value<0)return alert('กรุณาใส่มูลค่าที่ถูกต้อง');
     if(modal==='editAsset'){const i=data.assets.findIndex(x=>x.id===editId);if(i>=0)data.assets[i]=row}else data.assets.push(row);
-    const savedAssetId=row.id; const wasEditing=modal==='editAsset'; audit(wasEditing?'แก้ไขทรัพย์สิน':'เพิ่มทรัพย์สิน',row.name); snapshotCurrentMonth(); save(); modal=null; editId=null; render();
+    const savedAssetId=row.id; const wasEditing=modal==='editAsset'; audit(wasEditing?'แก้ไขทรัพย์สิน':'เพิ่มทรัพย์สิน',row.name); snapshotCurrentMonth(); captureDailyNetWorth(); save(); modal=null; editId=null; render();
     if(wasEditing){requestAnimationFrame(()=>{const target=document.querySelector(`[data-asset-id="${CSS.escape(savedAssetId)}"]`);if(target){target.scrollIntoView({block:'center'});target.classList.add('asset-saved-flash');setTimeout(()=>target.classList.remove('asset-saved-flash'),1400)}else window.scrollTo(0,assetReturnY||0);assetReturnId='';})}
   });
   $('#addAssetNote')?.addEventListener('click',()=>{const a=findAsset(editId);if(!a)return;const text=prompt(`บันทึกเกี่ยวกับ ${a.name}`,'');if(text===null)return;const v=text.trim();if(!v)return;data.assetNotes=Array.isArray(data.assetNotes)?data.assetNotes:[];data.assetNotes.push({id:uid(),assetId:a.id,text:v.slice(0,300),date:today(),createdAt:Date.now()});audit('เพิ่ม Asset Note',a.name);save();render()});
   $$('.asset-note-edit').forEach(b=>b.addEventListener('click',()=>{const n=(data.assetNotes||[]).find(x=>x.id===b.dataset.assetNoteId);if(!n)return;const v=prompt('แก้ไขบันทึก',n.text);if(v===null)return;if(!v.trim()){if(confirm('ลบบันทึกนี้ใช่หรือไม่?'))data.assetNotes=data.assetNotes.filter(x=>x.id!==n.id);else return;}else n.text=v.trim().slice(0,300);audit('แก้ไข Asset Note',findAsset(n.assetId)?.name||'');save();render()}));
   $('#reconcileAsset')?.addEventListener('click',()=>{modal='reconcile';render()});
-  $('#reconcileForm')?.addEventListener('submit',e=>{e.preventDefault();const a=findAsset(editId);if(!a)return;const actual=parseMoney($('#actualBalance').value);if(!Number.isFinite(actual)||actual<0)return alert('กรุณาใส่ยอดจริง');const before=Number(a.value||0);a.value=actual;data.reconciliations=Array.isArray(data.reconciliations)?data.reconciliations:[];audit('Reconcile',`${a.name}: ${THB(before)} → ${THB(actual)}`);data.reconciliations.push({id:uid(),assetId:a.id,date:new Date().toISOString(),before,after:actual,difference:round2(actual-before),note:$('#reconcileNote').value.trim()});snapshotCurrentMonth();save();modal=null;editId=null;render()});
-  $('#deleteAsset')?.addEventListener('click',()=>{if(confirm('ลบทรัพย์สินนี้ใช่หรือไม่?')){data.assets=data.assets.filter(x=>x.id!==editId);snapshotCurrentMonth();save();modal=null;editId=null;render()}});
+  $('#reconcileForm')?.addEventListener('submit',e=>{e.preventDefault();const a=findAsset(editId);if(!a)return;const actual=parseMoney($('#actualBalance').value);if(!Number.isFinite(actual)||actual<0)return alert('กรุณาใส่ยอดจริง');const before=Number(a.value||0);a.value=actual;data.reconciliations=Array.isArray(data.reconciliations)?data.reconciliations:[];audit('Reconcile',`${a.name}: ${THB(before)} → ${THB(actual)}`);data.reconciliations.push({id:uid(),assetId:a.id,date:new Date().toISOString(),before,after:actual,difference:round2(actual-before),note:$('#reconcileNote').value.trim()});snapshotCurrentMonth();captureDailyNetWorth();save();modal=null;editId=null;render()});
+  $('#deleteAsset')?.addEventListener('click',()=>{if(confirm('ลบทรัพย์สินนี้ใช่หรือไม่?')){data.assets=data.assets.filter(x=>x.id!==editId);snapshotCurrentMonth();captureDailyNetWorth();save();modal=null;editId=null;render()}});
 
   $('#goalForm')?.addEventListener('submit',e=>{
     e.preventDefault(); const row={id:editId||uid(),name:$('#goalName').value.trim(),target:parseMoney($('#goalTarget').value)||0,current:parseMoney($('#goalCurrent').value)||0};
@@ -796,8 +821,8 @@ function bind(){
   $('#autoLock')?.addEventListener('change',e=>{data.autoLock=e.target.checked;save()});
   $('#lockMinutes')?.addEventListener('change',e=>{data.autoLockMinutes=Number(e.target.value)||1;save()});
   $('#lockNow')?.addEventListener('click',async()=>{data.lastActive=Date.now();save();await saveSeq;currentPin=null;unlocked=false;render()});
-  $('#snapshotBtn')?.addEventListener('click',()=>{snapshotCurrentMonth();save();alert('บันทึก Snapshot เดือนนี้แล้ว');render()});
-  $('#exportBtn')?.addEventListener('click',async()=>{const pass=prompt('ตั้งรหัสผ่านสำหรับไฟล์ Backup (อย่างน้อย 8 ตัวอักษร)');if(!pass)return;if(pass.length<8)return alert('รหัสผ่าน Backup ต้องอย่างน้อย 8 ตัวอักษร');snapshotCurrentMonth();save();await saveSeq;const snap=clone(data);delete snap.pin;const box=await encryptObject(snap,pass);const blob=new Blob([JSON.stringify(box,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-ENCRYPTED-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});
+  $('#snapshotBtn')?.addEventListener('click',()=>{snapshotCurrentMonth();captureDailyNetWorth();save();alert('บันทึก Snapshot เดือนนี้แล้ว');render()});
+  $('#exportBtn')?.addEventListener('click',async()=>{const pass=prompt('ตั้งรหัสผ่านสำหรับไฟล์ Backup (อย่างน้อย 8 ตัวอักษร)');if(!pass)return;if(pass.length<8)return alert('รหัสผ่าน Backup ต้องอย่างน้อย 8 ตัวอักษร');snapshotCurrentMonth();captureDailyNetWorth();save();await saveSeq;const snap=clone(data);delete snap.pin;const box=await encryptObject(snap,pass);const blob=new Blob([JSON.stringify(box,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-ENCRYPTED-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});
   $('#importBtn')?.addEventListener('click',()=>document.getElementById('importFile').click());
 }
 

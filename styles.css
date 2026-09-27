@@ -318,3 +318,12 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .v19-lock .pin-error-msg{height:18px;margin:0 0 2px;font-size:12px}
 .v19-lock .privacy-line{margin-top:9px}
 @media(max-height:720px){.v19-lock{padding-top:18px!important}.v19-lock .lock-logo{width:58px!important;height:58px!important}.v19-lock h1{font-size:23px!important}.pin-ready-title{margin:13px 0 10px}.pin-dots{margin-bottom:8px}.pin-keypad button,.pin-keypad span{height:48px}.pin-keypad button{line-height:48px}}
+
+/* MY FINANCE V1.6 — Net Worth History & Audit + rounded asset rows */
+.hero-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
+.hero-foot .delta{margin:0!important}.hero-history{border:0;background:rgba(255,255,255,.13);color:#fff;border-radius:12px;padding:7px 10px;font-size:12px;font-weight:750;white-space:nowrap}
+.nw-history-list{display:grid;gap:8px;margin-top:14px}.nw-day{border:1px solid #e0e4e3;border-radius:14px;background:#fff;overflow:hidden}.nw-day summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px;list-style:none}.nw-day summary::-webkit-details-marker{display:none}.nw-day summary>div{display:grid;gap:2px}.nw-day summary small{font-size:11px;color:#77827f}.nw-day-value{text-align:right}.nw-day-value b{font-size:15px}.nw-day-value small{font-weight:700}.nw-alert{border-color:#d9b5a2}.nw-breakdown{padding:10px 12px;border-top:1px solid #e7e9e8;background:#f7f8f6;display:grid;grid-template-columns:1fr 1fr;gap:7px 12px}.nw-breakdown span{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#687470}.nw-breakdown b{color:#1d2e3c;font-size:11px}
+.investment-group-head>div{display:grid;gap:3px}.investment-group-head small{font-size:10px;color:#77817e;font-weight:500}.investment-group-head em{font-style:normal;font-weight:700}
+/* Each asset row is a true inset sub-card with four rounded corners. */
+.tx-list .asset-row{margin:4px 7px!important;border-radius:15px!important;border:1px solid rgba(30,55,68,.07)!important;overflow:hidden!important}
+.tx-list .asset-row+.asset-row{margin-top:4px!important}.investment-group{padding:0 3px 4px}.investment-group-head{margin:0 -3px 2px}
