@@ -327,3 +327,23 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 /* Each asset row is a true inset sub-card with four rounded corners. */
 .tx-list .asset-row{margin:4px 7px!important;border-radius:15px!important;border:1px solid rgba(30,55,68,.07)!important;overflow:hidden!important}
 .tx-list .asset-row+.asset-row{margin-top:4px!important}.investment-group{padding:0 3px 4px}.investment-group-head{margin:0 -3px 2px}
+
+/* MY FINANCE V1.7 — clearer wealth tabs + unified premium transaction icons */
+.wealth-switch button{font-size:20px!important;line-height:1.15!important;padding:12px 8px!important}
+.tx-list .tx:not(.asset-row) .tx-ico{width:42px!important;height:42px!important;border-radius:13px!important;display:grid!important;place-items:center!important;padding:0!important;background:linear-gradient(145deg,#f7f9fa,#e8eef2)!important;border:1px solid rgba(28,59,78,.08)!important;box-shadow:0 4px 12px rgba(16,47,79,.08),inset 0 1px 0 rgba(255,255,255,.85)!important}
+.tx-symbol{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#173a53;background:linear-gradient(145deg,#fff,#eef3f5);box-shadow:inset 0 1px 0 rgba(255,255,255,.9)}
+.tx-symbol svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tx-symbol-food{color:#9b6534;background:linear-gradient(145deg,#fff6e8,#f2e2c9)}
+.tx-symbol-family,.tx-symbol-rent{color:#875b62;background:linear-gradient(145deg,#fff2f1,#f0dddd)}
+.tx-symbol-utility{color:#a87916;background:linear-gradient(145deg,#fff9dc,#f2e7b8)}
+.tx-symbol-maintenance{color:#6d667e;background:linear-gradient(145deg,#f6f2fb,#e5dfef)}
+.tx-symbol-health{color:#a64d55;background:linear-gradient(145deg,#fff0f1,#f1dadd)}
+.tx-symbol-travel{color:#3e6f91;background:linear-gradient(145deg,#eef8ff,#dcebf5)}
+.tx-symbol-shopping{color:#7d5b8f;background:linear-gradient(145deg,#f8f0fc,#e9dff0)}
+.tx-symbol-income,.tx-symbol-interest{color:#287154;background:linear-gradient(145deg,#effaf4,#dceee5)}
+.tx-symbol-transfer{color:#356b92;background:linear-gradient(145deg,#eff7fc,#dceaf3)}
+.tx-symbol-investment{color:#27704d;background:linear-gradient(145deg,#eff9f1,#dcebdc)}
+.tx-symbol-education{color:#4e628d;background:linear-gradient(145deg,#f0f3fb,#dfe5f1)}
+.tx-symbol-tax{color:#6c6870;background:linear-gradient(145deg,#f5f4f5,#e5e3e6)}
+.tx-symbol-inkind{color:#5c7655;background:linear-gradient(145deg,#f2f8ed,#e0ead9)}
+.tx-symbol-other{color:#69777d;background:linear-gradient(145deg,#f6f8f8,#e5eaeb)}

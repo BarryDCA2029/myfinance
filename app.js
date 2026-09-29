@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.6';
+const APP_VERSION='1.7';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','เบิกค่าเช่าบ้าน','เบิก พ.ต.ส.','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -139,6 +139,7 @@ function inCurrentMonth(t){return (t.date||'').slice(0,7)===monthKey()}
 function esc(s=''){return String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function typeLabel(t){return ({income:'รายรับ',expense:'รายจ่าย',reimbursement:'คืนค่าใช้จ่าย',transfer:'โอนเงิน',investment:'ลงทุน',inKind:'ผลผลิตใช้เอง'})[t]||t}
 function cashAssets(){return data.assets.filter(a=>a.kind==='cash')}
+function moneyAccountAssets(){return data.assets.filter(a=>a.kind==='cash'||isKsecCashAsset(a))}
 function findAsset(id){return data.assets.find(a=>a.id===id)}
 function reverseTxAssetEffect(tx){
   const amt=Number(tx?.amount||0);
@@ -159,7 +160,44 @@ function applyTxAssetEffect(tx){
   else if(tx?.type==='investment'){if(src)src.value=round2(Number(src.value||0)-amt);if(dst){dst.cost=round2(Number(dst.cost||0)+amt);dst.value=round2(Number(dst.value||0)+amt);}}
 }
 function round2(n){return Math.round((Number(n||0)+Number.EPSILON)*100)/100}
-function iconFor(cat){const m={'อาหาร':'🍜','เดินทาง':'🚗','ครอบครัว':'👨‍👩‍👧','สุขภาพ':'🩺','การศึกษา':'📚','ท่องเที่ยว':'✈️','ภาษี':'🧾','ของใช้ส่วนตัว':'🧴','ค่าสาธารณูปโภค':'💡','ค่าซ่อม/บำรุง':'🛠️','ค่าแรง':'👷','วัสดุ/อุปกรณ์':'🧰','ปุ๋ย/ต้นไม้':'🌱','อาหารสัตว์':'🌾','เงินเดือน':'💼','ปันผล':'💹','ดอกเบี้ย':'🏦','รายได้พิเศษ':'✨','รายรับพิเศษ/เงินสนับสนุน':'✦','เงินเดือนรอบ 1':'💼','เงินเดือนรอบ 2':'💼','ค่าเช่า 1':'🏠','ค่าเช่า 2':'🏠','ค่าเช่า 19/307':'🏠','ค่าเช่า 19/308':'🏠','เบิกค่าเช่าบ้าน':'🏠','เบิก พ.ต.ส.':'✦','ผลผลิตใช้เอง':'◇','ค่าเช่า':'🏠','ขายทรัพย์สิน':'🏷️','ลงทุน':'📈','โอนเงิน':'🔄','อื่น ๆ':'•'};return m[cat]||'•'}
+function iconFor(cat){
+  const c=String(cat||'');
+  let k='other';
+  if(/อาหาร|อาหารสัตว์/.test(c))k='food';
+  else if(/ครอบครัว/.test(c))k='family';
+  else if(/สาธารณูปโภค/.test(c))k='utility';
+  else if(/ซ่อม|บำรุง|วัสดุ|อุปกรณ์|ปุ๋ย|ต้นไม้/.test(c))k='maintenance';
+  else if(/สุขภาพ/.test(c))k='health';
+  else if(/เดินทาง|ท่องเที่ยว/.test(c))k='travel';
+  else if(/ของใช้ส่วนตัว/.test(c))k='shopping';
+  else if(/เงินเดือน|รายได้พิเศษ|รายรับพิเศษ|พ\.ต\.ส\.|ขายทรัพย์สิน/.test(c))k='income';
+  else if(/ปันผล|ดอกเบี้ย/.test(c))k='interest';
+  else if(/ค่าเช่า|เบิกค่าเช่าบ้าน/.test(c))k='rent';
+  else if(/โอนเงิน/.test(c))k='transfer';
+  else if(/ลงทุน/.test(c))k='investment';
+  else if(/การศึกษา/.test(c))k='education';
+  else if(/ภาษี/.test(c))k='tax';
+  else if(/ผลผลิตใช้เอง/.test(c))k='inkind';
+  const svg={
+    food:'<path d="M8 3v8M5 3v5a3 3 0 0 0 6 0V3M16 3v18M16 3c3 2 4 5 4 8h-4"/>',
+    family:'<circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 20c.5-4 2.5-6 5.5-6s5 2 5.5 6M14 15c3-.5 5 1 6 4"/>',
+    utility:'<path d="M9 18h6M10 21h4M8 13c-2-2-2-6 0-8s6-2 8 0 2 6 0 8c-1 1-2 2-2 4h-4c0-2-1-3-2-4z"/>',
+    maintenance:'<path d="M14 6a4 4 0 0 0-5 5L3 17l4 4 6-6a4 4 0 0 0 5-5l-3 2-3-3 2-3z"/>',
+    health:'<path d="M12 21s-7-4.5-7-10a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 5.5-7 10-7 10z"/><path d="M12 8v7M8.5 11.5h7"/>',
+    travel:'<path d="M3 16l2-5h14l2 5v4h-2v-2H5v2H3v-4zM7 11l2-5h6l2 5M6 15h.01M18 15h.01"/>',
+    shopping:'<path d="M6 8h12l-1 13H7L6 8zM9 9V6a3 3 0 0 1 6 0v3"/>',
+    income:'<path d="M12 3v18M16 7c-1-1-2-2-4-2-2.5 0-4 1-4 3s1.5 3 4 3 4 1 4 3-1.5 3-4 3c-2 0-3-1-4-2"/>',
+    interest:'<path d="M4 10h16M6 10v8M10 10v8M14 10v8M18 10v8M3 21h18M12 3l9 5H3l9-5z"/>',
+    rent:'<path d="M3 11l9-8 9 8M5 10v11h14V10M9 21v-7h6v7"/>',
+    transfer:'<path d="M4 8h14M15 5l3 3-3 3M20 16H6M9 13l-3 3 3 3"/>',
+    investment:'<path d="M4 18l5-5 4 3 7-9M15 7h5v5"/>',
+    education:'<path d="M3 9l9-5 9 5-9 5-9-5zM6 11v5c4 3 8 3 12 0v-5"/>',
+    tax:'<path d="M7 3h10l3 3v15H4V3h3zM8 9h8M8 13h8M8 17h5"/>',
+    inkind:'<path d="M12 21c-5-3-7-7-6-12 5-1 9 1 12 6-1 3-3 5-6 6zM8 16c3-3 6-5 10-6"/>',
+    other:'<circle cx="6" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18" cy="12" r="1.4"/>'
+  };
+  return `<span class="tx-symbol tx-symbol-${k}"><svg viewBox="0 0 24 24" aria-hidden="true">${svg[k]}</svg></span>`;
+}
 function audit(action,detail=''){data.auditLog=Array.isArray(data.auditLog)?data.auditLog:[];data.auditLog.push({id:uid(),at:new Date().toISOString(),action,detail});data.auditLog=data.auditLog.slice(-500)}
 function liquidityLabel(v){return ({ready:'พร้อมใช้',limited:'มีข้อจำกัด',low:'สภาพคล่องต่ำ'})[v]||'พร้อมใช้'}
 function assetKindLabel(k){return ({cash:'เงินสด/ธนาคาร',stock:'หุ้น/กองทุน',gold:'ทอง',property:'ที่ดิน/อสังหาฯ',vehicle:'รถ/ยานพาหนะ',other:'ทรัพย์สินอื่น',debt:'หนี้สิน'})[k]||k}
@@ -471,7 +509,7 @@ function investmentIcon(a){
   if(group==='ksec' && /cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port|^port\s*k[- ]?securities$|port\s*k[- ]?securities/.test(name)){src='wallet.png';alt='Cash in Port';}
   else if(group==='ttbinv' || /ttb\s*rmf|jb25|^mf$/.test(name.trim())){src='ttb.png';alt='TTB Investment';}
   else if(group==='scbinv' || /scbs&p500|scb\s*s&p500/.test(name)){src='scb.png';alt='SCB Investment';}
-  return `<img class="bank-logo asset-picture investment-picture" src="${src}?v=1.6" alt="${esc(alt)}">`;
+  return `<img class="bank-logo asset-picture investment-picture" src="${src}?v=1.7" alt="${esc(alt)}">`;
 }
 function assetIcon(a){if(a?.kind==='stock')return investmentIcon(a);const b=assetBrand(a);const genericMap={cashstack:'wallet.png',vehicle:'vehicle.png',other:'other.png'};if(genericMap[b.key])return `<img class="bank-logo asset-picture" src="${genericMap[b.key]}" alt="${esc(b.name)}">`;return ASSET_ICON_KEYS.has(b.key)?`<img class="bank-logo asset-picture" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">●</span>`}
 function bankRank(a){
@@ -600,7 +638,7 @@ function txSheet(){
   const x=editing?data.transactions.find(t=>t.id===editId):null;
   const type=x?.type||txDraftType||'expense';
   const cats=type==='income'?incomeCats:type==='investment'?['ลงทุน','อื่น ๆ']:type==='transfer'?['โอนเงิน']:type==='inKind'?['ผลผลิตใช้เอง']:expenseCats;
-  const accountFields=type==='inKind'?`<div class="notice">มูลค่าผลผลิตที่ใช้เอง เช่น ไข่ที่กินเอง ไม่เพิ่มรายรับและไม่เพิ่มยอดเงินใน Assets</div><div class="field"><label>หมวด</label><select id="category"><option>ผลผลิตใช้เอง</option></select></div>`:type==='transfer'?`<div class="row2"><div class="field"><label>จากบัญชี</label><select id="sourceAsset" required><option value="">เลือกต้นทาง</option>${cashAssets().map(a=>`<option value="${esc(a.id)}" ${x?.sourceAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div><div class="field"><label>ไปบัญชี</label><select id="destinationAsset" required><option value="">เลือกปลายทาง</option>${cashAssets().map(a=>`<option value="${esc(a.id)}" ${x?.destinationAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div></div><small class="field-hint">โอนเงินจะลดต้นทาง เพิ่มปลายทาง และไม่ถูกนับเป็นรายรับ/รายจ่าย</small>`:type==='investment'?`<div class="field"><label>หมวด</label><select id="category"><option>ลงทุน</option><option ${x?.category==='อื่น ๆ'?'selected':''}>อื่น ๆ</option></select></div><div class="row2"><div class="field"><label>เงินออกจาก</label><select id="sourceAsset" required><option value="">เลือกบัญชีเงิน</option>${cashAssets().map(a=>`<option value="${esc(a.id)}" ${x?.sourceAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div><div class="field"><label>ซื้อ / ลงทุนเข้า</label><select id="destinationAsset" required><option value="">เลือกหุ้น/กองทุน</option>${data.assets.filter(a=>a.kind==='stock').map(a=>`<option value="${esc(a.id)}" ${x?.destinationAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div></div><small class="field-hint">ระบบลดเงินต้นทาง และเพิ่มต้นทุน/มูลค่าของสินทรัพย์ลงทุนอัตโนมัติ · ไม่เป็นรายจ่ายกินใช้</small>`:`<div class="row2"><div class="field"><label>หมวด</label><select id="category">${cats.map(c=>`<option ${x?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>แหล่งเงิน / บัญชี</label><select id="sourceAsset"><option value="">ไม่ผูกบัญชี</option>${orderedCashAssets(type,x?.sourceAssetId||'').map(a=>{const auto=!editing&&type==='expense'&&!x?.sourceAssetId&&a.id===(data.settings?.defaultExpenseAssetId||cashAssets().find(z=>/ttb all free/i.test(z.name||''))?.id);return `<option value="${esc(a.id)}" ${(x?.sourceAssetId===a.id||(!x?.sourceAssetId&&x?.account===a.name)||auto)?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`}).join('')}</select><small class="field-hint">${type==='reimbursement'?'เงินคืนจะเพิ่มยอดบัญชี และหักออกจากรายจ่ายสุทธิ':'รายจ่ายหักยอด · รายรับเพิ่มยอดอัตโนมัติ'}</small></div></div>`;
+  const accountFields=type==='inKind'?`<div class="notice">มูลค่าผลผลิตที่ใช้เอง เช่น ไข่ที่กินเอง ไม่เพิ่มรายรับและไม่เพิ่มยอดเงินใน Assets</div><div class="field"><label>หมวด</label><select id="category"><option>ผลผลิตใช้เอง</option></select></div>`:type==='transfer'?`<div class="row2"><div class="field"><label>จากบัญชี</label><select id="sourceAsset" required><option value="">เลือกต้นทาง</option>${moneyAccountAssets().map(a=>`<option value="${esc(a.id)}" ${x?.sourceAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div><div class="field"><label>ไปบัญชี</label><select id="destinationAsset" required><option value="">เลือกปลายทาง</option>${moneyAccountAssets().map(a=>`<option value="${esc(a.id)}" ${x?.destinationAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div></div><small class="field-hint">โอนเงินจะลดต้นทาง เพิ่มปลายทาง และไม่ถูกนับเป็นรายรับ/รายจ่าย</small>`:type==='investment'?`<div class="field"><label>หมวด</label><select id="category"><option>ลงทุน</option><option ${x?.category==='อื่น ๆ'?'selected':''}>อื่น ๆ</option></select></div><div class="row2"><div class="field"><label>เงินออกจาก</label><select id="sourceAsset" required><option value="">เลือกบัญชีเงิน</option>${moneyAccountAssets().map(a=>`<option value="${esc(a.id)}" ${x?.sourceAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div><div class="field"><label>ซื้อ / ลงทุนเข้า</label><select id="destinationAsset" required><option value="">เลือกหุ้น/กองทุน</option>${data.assets.filter(a=>a.kind==='stock').map(a=>`<option value="${esc(a.id)}" ${x?.destinationAssetId===a.id?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`).join('')}</select></div></div><small class="field-hint">ระบบลดเงินต้นทาง และเพิ่มต้นทุน/มูลค่าของสินทรัพย์ลงทุนอัตโนมัติ · ไม่เป็นรายจ่ายกินใช้</small>`:`<div class="row2"><div class="field"><label>หมวด</label><select id="category">${cats.map(c=>`<option ${x?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>แหล่งเงิน / บัญชี</label><select id="sourceAsset"><option value="">ไม่ผูกบัญชี</option>${orderedCashAssets(type,x?.sourceAssetId||'').map(a=>{const auto=!editing&&type==='expense'&&!x?.sourceAssetId&&a.id===(data.settings?.defaultExpenseAssetId||cashAssets().find(z=>/ttb all free/i.test(z.name||''))?.id);return `<option value="${esc(a.id)}" ${(x?.sourceAssetId===a.id||(!x?.sourceAssetId&&x?.account===a.name)||auto)?'selected':''}>${esc(a.name)} · ${THB(a.value)}</option>`}).join('')}</select><small class="field-hint">${type==='reimbursement'?'เงินคืนจะเพิ่มยอดบัญชี และหักออกจากรายจ่ายสุทธิ':'รายจ่ายหักยอด · รายรับเพิ่มยอดอัตโนมัติ'}</small></div></div>`;
   return `<div class="sheet-back" id="sheetBack"><div class="sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>${editing?'แก้ไขรายการ':'เพิ่มรายการ'}</h3><div class="type-grid">${[['income','↑','รายรับ'],['expense','↓','รายจ่าย'],['reimbursement','↩','คืนค่าใช้จ่าย'],['transfer','⇄','โอนเงิน'],['inKind','◇','ผลผลิตใช้เอง'],['investment','↗','ลงทุน']].map(([t,i,n])=>`<button class="type ${type===t?'sel':''}" data-txtype="${t}"><strong>${i}</strong>${n}</button>`).join('')}</div><form id="txForm"><input type="hidden" id="txType" value="${type}"><div class="field"><label>จำนวนเงิน</label><input id="amount" class="amount-input money-input" inputmode="decimal" type="text" autocomplete="off" placeholder="0.00" value="${x?num(x.amount):''}" required></div>${accountFields}<div class="field"><label>โครงการ / สถานที่</label><select id="project">${projects.map(c=>`<option ${((x?.project||'ส่วนตัว/ทั่วไป')===c)?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div class="field"><label>วันที่</label><input id="date" type="date" value="${x?.date||txDraftDate||today()}"></div><div class="field"><label>หมายเหตุ</label><input id="note" placeholder="ไม่บังคับ" value="${esc(x?.note||'')}"></div><button class="primary">${editing?'บันทึกการแก้ไข':'บันทึก'}</button>${editing?`<button type="button" class="danger" id="deleteTx">ลบรายการนี้</button>`:''}</form></div></div>`
 }
 function assetHistory(a){
