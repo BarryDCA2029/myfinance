@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.7';
+const APP_VERSION='1.8';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','เบิกค่าเช่าบ้าน','เบิก พ.ต.ส.','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -257,7 +257,8 @@ function netWorthBreakdown(){
 }
 function captureDailyNetWorth(){
   const t=totals(), date=today(), breakdown=netWorthBreakdown();
-  const row={date,netWorth:round2(t.netWorth),assetTotal:round2(t.assetTotal),debtTotal:round2(t.debtTotal),breakdown,updatedAt:new Date().toISOString()};
+  const assetItems=data.assets.map(a=>({id:a.id,name:a.name,kind:a.kind,value:round2(Number(a.value||0))}));
+  const row={date,netWorth:round2(t.netWorth),assetTotal:round2(t.assetTotal),debtTotal:round2(t.debtTotal),breakdown,assetItems,updatedAt:new Date().toISOString()};
   data.dailyNetWorthSnapshots=Array.isArray(data.dailyNetWorthSnapshots)?data.dailyNetWorthSnapshots:[];
   const i=data.dailyNetWorthSnapshots.findIndex(x=>x.date===date);
   if(i>=0)data.dailyNetWorthSnapshots[i]=row; else data.dailyNetWorthSnapshots.push(row);
@@ -266,8 +267,27 @@ function captureDailyNetWorth(){
 function dailyNetWorthHistorySheet(){
   const rows=[...(data.dailyNetWorthSnapshots||[])].sort((a,b)=>b.date.localeCompare(a.date));
   const labels={bank:'เงินสด/ธนาคาร',investment:'หุ้น/กองทุน',gold:'ทอง',property:'อสังหาฯ',vehicle:'รถ/ยานพาหนะ',other:'อื่น ๆ',debt:'หนี้สิน'};
-  const list=rows.map((r,i)=>{const prev=rows[i+1];const d=prev?round2(Number(r.netWorth)-Number(prev.netWorth)):null;const pct=prev&&Number(prev.netWorth)!==0?d/Math.abs(Number(prev.netWorth))*100:null;const unusual=d!==null&&(Math.abs(d)>=100000||Math.abs(pct||0)>=1);const detail=Object.entries(r.breakdown||{}).map(([k,v])=>`<span>${labels[k]||k}<b>${THB(v)}</b></span>`).join('');return `<details class="nw-day ${unusual?'nw-alert':''}"><summary><div><b>${new Date(r.date+'T12:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})}</b><small>${prev?'เปลี่ยนจากวันก่อน':'Starting Snapshot'}</small></div><div class="nw-day-value"><b>${THB(r.netWorth)}</b>${d!==null?`<small class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${THB(d)} (${pct>=0?'+':''}${pct.toFixed(2)}%)${unusual?' !':''}</small>`:''}</div></summary><div class="nw-breakdown">${detail}</div></details>`}).join('');
-  return `<div class="sheet-back" id="sheetBack"><div class="sheet nw-history-sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>Net Worth History</h3><p class="field-hint">วันละ 1 Snapshot · วันเดียวกันจะอัปเดตเป็นยอดล่าสุด ไม่สร้างประวัติย้อนหลังปลอม</p><div class="nw-history-list">${list||'<div class="empty">ยังไม่มี Snapshot รายวัน</div>'}</div></div></div>`;
+  const list=rows.map((r,i)=>{
+    const prev=rows[i+1];
+    const d=prev?round2(Number(r.netWorth)-Number(prev.netWorth)):null;
+    const pct=prev&&Number(prev.netWorth)!==0?d/Math.abs(Number(prev.netWorth))*100:null;
+    const unusual=d!==null&&(Math.abs(d)>=100000||Math.abs(pct||0)>=1);
+    const detail=Object.entries(r.breakdown||{}).map(([k,v])=>{
+      const pv=prev?.breakdown?Number(prev.breakdown[k]||0):null;
+      const cd=pv===null?null:round2(Number(v)-pv);
+      return `<span><span>${labels[k]||k}${cd!==null?` <em class="${cd>=0?'pos':'neg'}">${cd>=0?'+':''}${THB(cd)}</em>`:''}</span><b>${THB(v)}</b></span>`;
+    }).join('');
+    let itemDetail='';
+    if(prev&&Array.isArray(r.assetItems)&&Array.isArray(prev.assetItems)){
+      const pm=new Map(prev.assetItems.map(x=>[x.id,x]));
+      const cm=new Map(r.assetItems.map(x=>[x.id,x]));
+      const ids=[...new Set([...cm.keys(),...pm.keys()])];
+      const changes=ids.map(id=>{const c=cm.get(id),p=pm.get(id);const cv=Number(c?.value||0),pv=Number(p?.value||0),delta=round2(cv-pv);return {name:c?.name||p?.name||'รายการ',delta,value:cv}}).filter(x=>Math.abs(x.delta)>=0.01).sort((a,b)=>Math.abs(b.delta)-Math.abs(a.delta));
+      if(changes.length)itemDetail=`<div class="nw-item-title">รายการที่เปลี่ยน</div><div class="nw-item-changes">${changes.map(x=>`<span><b>${esc(x.name)}</b><em class="${x.delta>=0?'pos':'neg'}">${x.delta>=0?'+':''}${THB(x.delta)}</em></span>`).join('')}</div>`;
+    }
+    return `<details class="nw-day ${unusual?'nw-alert':''}"><summary><div><b>${new Date(r.date+'T12:00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})}</b><small>${prev?'เปลี่ยนจากวันก่อน':'Starting Snapshot'}</small></div><div class="nw-day-value"><b>${THB(r.netWorth)}</b>${d!==null?`<small class="${d>=0?'pos':'neg'}">${d>=0?'+':''}${THB(d)} (${pct>=0?'+':''}${pct.toFixed(2)}%)${unusual?' !':''}</small>`:''}</div></summary><div class="nw-breakdown">${detail}</div>${itemDetail}</details>`;
+  }).join('');
+  return `<div class="sheet-back" id="sheetBack"><div class="sheet nw-history-sheet"><button type="button" class="sheet-nav-back" data-sheet-close>‹ Back</button><h3>Net Worth History</h3><p class="field-hint">วันละ 1 Snapshot · แตะวันที่เพื่อดูว่าแต่ละหมวดเปลี่ยนเท่าไร · ตัวเลขการเปลี่ยนแปลงคือมูลค่าทรัพย์สินสุทธิ ไม่ใช่รายรับ</p><div class="nw-history-list">${list||'<div class="empty">ยังไม่มี Snapshot รายวัน</div>'}</div></div></div>`;
 }
 
 function render(){ledgerBalanceCache=null;document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
@@ -509,7 +529,7 @@ function investmentIcon(a){
   if(group==='ksec' && /cash\s*in\s*port|cash\s*in\s*portfolio|เงินสด.*port|^port\s*k[- ]?securities$|port\s*k[- ]?securities/.test(name)){src='wallet.png';alt='Cash in Port';}
   else if(group==='ttbinv' || /ttb\s*rmf|jb25|^mf$/.test(name.trim())){src='ttb.png';alt='TTB Investment';}
   else if(group==='scbinv' || /scbs&p500|scb\s*s&p500/.test(name)){src='scb.png';alt='SCB Investment';}
-  return `<img class="bank-logo asset-picture investment-picture" src="${src}?v=1.7" alt="${esc(alt)}">`;
+  return `<img class="bank-logo asset-picture investment-picture" src="${src}?v=1.6" alt="${esc(alt)}">`;
 }
 function assetIcon(a){if(a?.kind==='stock')return investmentIcon(a);const b=assetBrand(a);const genericMap={cashstack:'wallet.png',vehicle:'vehicle.png',other:'other.png'};if(genericMap[b.key])return `<img class="bank-logo asset-picture" src="${genericMap[b.key]}" alt="${esc(b.name)}">`;return ASSET_ICON_KEYS.has(b.key)?`<img class="bank-logo asset-picture" src="${b.key}.png" alt="${esc(b.name)}">`:`<span class="asset-brand ${b.key}">●</span>`}
 function bankRank(a){

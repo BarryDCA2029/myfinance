@@ -347,3 +347,13 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .tx-symbol-tax{color:#6c6870;background:linear-gradient(145deg,#f5f4f5,#e5e3e6)}
 .tx-symbol-inkind{color:#5c7655;background:linear-gradient(145deg,#f2f8ed,#e0ead9)}
 .tx-symbol-other{color:#69777d;background:linear-gradient(145deg,#f6f8f8,#e5eaeb)}
+\n\n/* MY FINANCE V1.8 — Net Worth change drill-down + equal My Wealth cards */
+.asset-grid{grid-auto-rows:1fr!important}
+.asset-grid .asset-card{min-height:132px!important;height:100%!important;display:flex!important;flex-direction:column!important;justify-content:center!important}
+.nw-breakdown>span{align-items:center}
+.nw-breakdown>span>span{display:flex;flex-direction:column;gap:2px}
+.nw-breakdown em{font-style:normal;font-size:10px;font-weight:800}
+.nw-item-title{padding:10px 12px 5px;border-top:1px solid #e7e9e8;background:#fff;font-size:11px;font-weight:800;color:#173a53}
+.nw-item-changes{padding:0 12px 11px;background:#fff;display:grid;gap:6px}
+.nw-item-changes span{display:flex;justify-content:space-between;gap:10px;font-size:11px}
+.nw-item-changes em{font-style:normal;font-weight:800}
