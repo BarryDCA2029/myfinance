@@ -347,9 +347,11 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .tx-symbol-tax{color:#6c6870;background:linear-gradient(145deg,#f5f4f5,#e5e3e6)}
 .tx-symbol-inkind{color:#5c7655;background:linear-gradient(145deg,#f2f8ed,#e0ead9)}
 .tx-symbol-other{color:#69777d;background:linear-gradient(145deg,#f6f8f8,#e5eaeb)}
-\n\n/* MY FINANCE V1.8 — Net Worth change drill-down + equal My Wealth cards */
-.asset-grid{grid-auto-rows:1fr!important}
-.asset-grid .asset-card{min-height:132px!important;height:100%!important;display:flex!important;flex-direction:column!important;justify-content:center!important}
+
+
+/* MY FINANCE V1.8.1 — compact equal-height My Wealth cards */
+.asset-grid{grid-auto-rows:108px!important}
+.asset-grid .asset-card{height:108px!important;min-height:108px!important;max-height:108px!important;padding:10px 14px!important;display:flex!important;flex-direction:column!important;justify-content:center!important}
 .nw-breakdown>span{align-items:center}
 .nw-breakdown>span>span{display:flex;flex-direction:column;gap:2px}
 .nw-breakdown em{font-style:normal;font-size:10px;font-weight:800}
