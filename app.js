@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.8.1';
+const APP_VERSION='1.8.2';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','เบิกค่าเช่าบ้าน','เบิก พ.ต.ส.','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -98,7 +98,12 @@ function load(){
   catch{return clone(defaultData)}
 }
 const te=new TextEncoder(), td=new TextDecoder();
-const b64=b=>btoa(String.fromCharCode(...new Uint8Array(b)));
+function b64(b){
+  // Chunk conversion: avoids iOS/WebKit 'too many arguments' failures on larger encrypted vaults/backups.
+  const bytes=new Uint8Array(b); let binary=''; const CHUNK=0x8000;
+  for(let i=0;i<bytes.length;i+=CHUNK) binary+=String.fromCharCode(...bytes.subarray(i,i+CHUNK));
+  return btoa(binary);
+}
 const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 async function deriveKey(secret,salt,usage=['encrypt','decrypt']){
   const base=await crypto.subtle.importKey('raw',te.encode(secret),'PBKDF2',false,['deriveKey']);
@@ -121,8 +126,19 @@ function save(){
   data.version=APP_VERSION; data.lastActive=Date.now();
   if(currentPin){
     const snap=clone(data); delete snap.pin;
-    saveSeq=saveSeq.then(async()=>{const box=await encryptObject(snap,currentPin);localStorage.setItem(VAULT_KEY,JSON.stringify(box));localStorage.removeItem(DB_KEY);hasSecureVault=true}).catch(()=>{});
-  }else if(!hasSecureVault){ localStorage.setItem(DB_KEY,JSON.stringify(data)); }
+    // Recover the queue after an earlier failure, but let THIS save reject so callers can warn/rollback.
+    saveSeq=saveSeq.catch(()=>{}).then(async()=>{
+      const box=await encryptObject(snap,currentPin);
+      localStorage.setItem(VAULT_KEY,JSON.stringify(box));
+      localStorage.removeItem(DB_KEY); hasSecureVault=true;
+    });
+    return saveSeq;
+  }
+  if(!hasSecureVault){
+    try{localStorage.setItem(DB_KEY,JSON.stringify(data)); return Promise.resolve()}
+    catch(err){return Promise.reject(err)}
+  }
+  return Promise.reject(new Error('Secure Vault is locked'));
 }
 async function unlockSecure(pin){
   const box=JSON.parse(localStorage.getItem(VAULT_KEY));
@@ -812,8 +828,9 @@ function bind(){
   $$('[data-sheet-close]').forEach(b=>b.addEventListener('click',()=>{if(modal==='tx')txDraftDate='';modal=null;editId=null;render()}));
   $$('[data-txtype]').forEach(b=>b.addEventListener('click',()=>{if(modal==='editTx')return; txDraftType=b.dataset.txtype; render()}));
 
-  $('#txForm')?.addEventListener('submit',e=>{
+  $('#txForm')?.addEventListener('submit',async e=>{
     e.preventDefault();
+    const beforeSave=clone(data);
     const sourceAssetId=$('#sourceAsset')?.value||'';
     const sourceAsset=sourceAssetId?findAsset(sourceAssetId):null;
     const destinationAssetId=$('#destinationAsset')?.value||''; const destinationAsset=destinationAssetId?findAsset(destinationAssetId):null;
@@ -829,7 +846,15 @@ function bind(){
       const i=data.transactions.findIndex(x=>x.id===editId);
       if(i>=0){reverseTxAssetEffect(data.transactions[i]); data.transactions[i]=row; applyTxAssetEffect(row)}
     }else{data.transactions.push(row);applyTxAssetEffect(row)}
-    audit(modal==='editTx'?'แก้ไขรายการ':'เพิ่มรายการ',`${typeLabel(row.type)} ${THB(row.amount)}`); snapshotCurrentMonth(); captureDailyNetWorth(); save(); txDraftDate=''; modal=null; editId=null; render();
+    audit(modal==='editTx'?'แก้ไขรายการ':'เพิ่มรายการ',`${typeLabel(row.type)} ${THB(row.amount)}`); snapshotCurrentMonth(); captureDailyNetWorth();
+    try{
+      await save();
+      txDraftDate=''; modal=null; editId=null; render();
+    }catch(err){
+      data=beforeSave;
+      alert('บันทึกไม่สำเร็จ ข้อมูลรายการนี้ยังไม่ถูกยืนยัน กรุณาลองอีกครั้ง\n\nระบบยังไม่ได้ปิดหน้าฟอร์มเพื่อป้องกันรายการหาย');
+      render();
+    }
   });
   $('#deleteTx')?.addEventListener('click',()=>{if(confirm('ลบรายการนี้ใช่หรือไม่?')){const old=data.transactions.find(x=>x.id===editId);reverseTxAssetEffect(old);audit('ลบรายการ',`${typeLabel(old?.type)} ${THB(old?.amount)}`);data.transactions=data.transactions.filter(x=>x.id!==editId);snapshotCurrentMonth();captureDailyNetWorth();save();modal=null;editId=null;render()}});
 
@@ -880,7 +905,7 @@ function bind(){
   $('#lockMinutes')?.addEventListener('change',e=>{data.autoLockMinutes=Number(e.target.value)||1;save()});
   $('#lockNow')?.addEventListener('click',async()=>{data.lastActive=Date.now();save();await saveSeq;currentPin=null;unlocked=false;render()});
   $('#snapshotBtn')?.addEventListener('click',()=>{snapshotCurrentMonth();captureDailyNetWorth();save();alert('บันทึก Snapshot เดือนนี้แล้ว');render()});
-  $('#exportBtn')?.addEventListener('click',async()=>{const pass=prompt('ตั้งรหัสผ่านสำหรับไฟล์ Backup (อย่างน้อย 8 ตัวอักษร)');if(!pass)return;if(pass.length<8)return alert('รหัสผ่าน Backup ต้องอย่างน้อย 8 ตัวอักษร');snapshotCurrentMonth();captureDailyNetWorth();save();await saveSeq;const snap=clone(data);delete snap.pin;const box=await encryptObject(snap,pass);const blob=new Blob([JSON.stringify(box,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-ENCRYPTED-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});
+  $('#exportBtn')?.addEventListener('click',async()=>{const pass=prompt('ตั้งรหัสผ่านสำหรับไฟล์ Backup (อย่างน้อย 8 ตัวอักษร)');if(!pass)return;if(pass.length<8)return alert('รหัสผ่าน Backup ต้องอย่างน้อย 8 ตัวอักษร');try{snapshotCurrentMonth();captureDailyNetWorth();await save();const snap=clone(data);delete snap.pin;const box=await encryptObject(snap,pass);const blob=new Blob([JSON.stringify(box,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`MY-FINANCE-ENCRYPTED-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}catch(err){alert('สร้าง Encrypted Backup ไม่สำเร็จ กรุณาอย่าลบแอปหรือ Restore และลองอีกครั้ง')}});
   $('#importBtn')?.addEventListener('click',()=>document.getElementById('importFile').click());
 }
 
