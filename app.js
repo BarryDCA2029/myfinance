@@ -1,6 +1,6 @@
 const DB_KEY='myfinance_v1';
 const VAULT_KEY='myfinance_secure_v122';
-const APP_VERSION='1.8.3';
+const APP_VERSION='1.8.4';
 const expenseCats=['อาหาร','เดินทาง','ครอบครัว','สุขภาพ','การศึกษา','ท่องเที่ยว','ภาษี','ของใช้ส่วนตัว','ค่าสาธารณูปโภค','ค่าซ่อม/บำรุง','ค่าแรง','วัสดุ/อุปกรณ์','ปุ๋ย/ต้นไม้','อาหารสัตว์','อื่น ๆ'];
 const projects=['ส่วนตัว/ทั่วไป','House 19/307 @18 ตรว.','House 19/308 @18 ตรว.','บ้าน เกษตรวิสัย','เลี้ยงไก่','ป่ายาง','ป่ายูคา','Polar Farm 1','Polar Farm 2'];
 const incomeCats=['เงินเดือนรอบ 1','เงินเดือนรอบ 2','เบิกค่าเช่าบ้าน','เบิก พ.ต.ส.','ค่าเช่า 19/307','ค่าเช่า 19/308','รายรับพิเศษ/เงินสนับสนุน','ปันผล','ดอกเบี้ย','ขายทรัพย์สิน','อื่น ๆ'];
@@ -309,19 +309,8 @@ function dailyNetWorthHistorySheet(){
 function render(){ledgerBalanceCache=null;document.getElementById('app').innerHTML=!unlocked?lockView():appView();bind()}
 function lockView(){
   const first=!(hasSecureVault||legacyPin||currentPin);
-  const now=new Date(), month=now.getMonth()+1, hour=now.getHours();
-  const season=month>=10?'autumn':month<=3?'winter':month<=6?'spring':'green';
-  const light=hour>=6&&hour<18?'day':'night';
-  const pieces=season==='autumn'
-    ? Array.from({length:14},(_,i)=>`<i class="season-piece leaf l${i%7}">◆</i>`).join('')
-    : season==='winter'
-    ? Array.from({length:24},(_,i)=>`<i class="season-piece snow s${i%8}">•</i>`).join('')
-    : season==='spring'
-    ? `<div class="flower-field">${Array.from({length:12},(_,i)=>`<i class="flower f${i%6}">✿</i>`).join('')}</div>${Array.from({length:9},(_,i)=>`<i class="season-piece petal p${i%6}">❀</i>`).join('')}`
-    : `<div class="grass-field">${Array.from({length:22},(_,i)=>`<i class="blade b${i%6}"></i>`).join('')}</div>`;
-  const scene=`<div class="season-scene season-${season} season-${light}" aria-hidden="true"><div class="season-glow"></div>${pieces}</div>`;
   const keypad=`<div class="pin-dots" id="pinDots" aria-label="PIN 6 หลัก">${Array.from({length:6},(_,i)=>`<i data-pin-dot="${i}"></i>`).join('')}</div><div class="pin-error-msg" role="status"></div><div class="pin-keypad" id="pinKeypad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-pin-key="${n}">${n}</button>`).join('')}<span></span><button type="button" data-pin-key="0">0</button><button type="button" class="pin-backspace" data-pin-back aria-label="ลบเลขล่าสุด">⌫</button></div>`;
-  return `<div class="lock seasonal-lock">${scene}<div class="lock-card v19-lock"><div class="lock-logo">฿</div><h1>MY FINANCE</h1><p class="lock-tag">PRIVATE WEALTH</p>${first?`<div class="notice"><b>SECURITY SETUP</b><br>ตั้ง PIN 6 หลักก่อนเข้าใช้งานครั้งแรก ข้อมูลเดิมในเครื่องจะถูกเข้ารหัสหลังตั้ง PIN สำเร็จ</div><div class="field pin-field"><label>NEW 6-DIGIT PIN</label><input id="firstPin1" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><div class="field pin-field"><label>CONFIRM PIN</label><input id="firstPin2" class="pin" inputmode="numeric" maxlength="6" type="password" placeholder="••••••"></div><button class="primary" id="setupPinBtn">SET PIN & UNLOCK</button>`:`<div class="pin-ready-title">ระบุรหัส PIN เพื่อเข้าสู่ระบบ</div>${keypad}`}<div class="privacy-line">Private • Local-first • Encrypted</div></div></div>`
+  const m=new Date().getMonth()+1; const season=(m<=3?'winter':m<=6?'spring':m<=9?'summer':'fall'); return `<div class="lock season-${season}"><div class="lock-card v19-lock"><h1>MY FINANCE</h1><p class="lock-tag">PRIVATE WEALTH</p>${first?`<div class="notice"><b>SECURITY SETUP</b><br>ตั้ง PIN 6 หลักก่อนเข้าใช้งานครั้งแรก ข้อมูลเดิมในเครื่องจะถูกเข้ารหัสหลังตั้ง PIN สำเร็จ</div><div class="field pin-field"><label>NEW 6-DIGIT PIN</label><input id="firstPin1" class="pin" inputmode="numeric" maxlength="6" type="password" autofocus placeholder="••••••"></div><div class="field pin-field"><label>CONFIRM PIN</label><input id="firstPin2" class="pin" inputmode="numeric" maxlength="6" type="password" placeholder="••••••"></div><button class="primary" id="setupPinBtn">SET PIN & UNLOCK</button>`:`<div class="pin-ready-title">ระบุรหัส PIN เพื่อเข้าสู่ระบบ</div>${keypad}`}<div class="privacy-line">Private • Local-first • Encrypted</div></div></div>`
 }
 function appView(){return `<main class="shell">${page==='dashboard'?dashboard():page==='transactions'?transactions():page==='assets'?assets():page==='plan'?plan():settings()}</main>${bottomNav()}${modal?sheet():''}`}
 function wealthSwitch(active='dashboard'){return `<div class="wealth-switch"><button class="${active==='dashboard'?'active':''}" data-page="dashboard">Dashboard</button><button class="${active==='assets'?'active':''}" data-page="assets">Assets</button></div>`}
