@@ -380,9 +380,9 @@ body{background:linear-gradient(180deg,var(--v1102-warm) 0%,#f1f2f1 100%)!import
 .lock:after{display:none!important}
 .lock.season-fall{background-image:url('season-fall.jpg')!important}
 /* Future seasons switch automatically by device month; lightweight local CSS scenery, no network/API. */
-.lock.season-winter{background-image:radial-gradient(circle at 18% 12%,rgba(255,255,255,.95) 0 2px,transparent 3px),radial-gradient(circle at 72% 20%,rgba(255,255,255,.9) 0 3px,transparent 4px),linear-gradient(165deg,#dfeaf1 0 35%,#9fb7c6 36% 53%,#edf3f5 54% 70%,#c6d9e3 71% 100%)!important;background-size:73px 89px,111px 127px,cover!important}
-.lock.season-spring{background-image:radial-gradient(circle at 18% 16%,#f7b9c8 0 5px,transparent 6px),radial-gradient(circle at 78% 23%,#fbd5de 0 7px,transparent 8px),radial-gradient(circle at 42% 8%,#fff0f4 0 6px,transparent 7px),linear-gradient(160deg,#bfe3ef 0 42%,#8db7a3 43% 62%,#d9e9c9 63% 100%)!important;background-size:78px 82px,106px 112px,92px 96px,cover!important}
-.lock.season-summer{background-image:linear-gradient(170deg,rgba(255,255,255,.1),transparent 35%),linear-gradient(165deg,#65b9e8 0 39%,#5c9b61 40% 61%,#86b95f 62% 78%,#4f873f 79% 100%)!important}
+.lock.season-winter{background-image:url('season-winter.jpg')!important}
+.lock.season-spring{background-image:url('season-spring.jpg')!important}
+.lock.season-summer{background-image:url('season-summer.jpg')!important}
 .v19-lock{max-width:390px!important;padding:30px 24px 20px!important;background:rgba(248,250,250,.76)!important;-webkit-backdrop-filter:blur(15px) saturate(1.08)!important;backdrop-filter:blur(15px) saturate(1.08)!important;border:1px solid rgba(255,255,255,.72)!important;box-shadow:0 22px 55px rgba(10,30,40,.20)!important}
 .v19-lock .lock-logo{display:none!important}
 .v19-lock h1{font-size:30px!important;letter-spacing:.035em!important}
